@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Context Highlighter",
+  "version": "2.0.0",
+  "description": "Resalta texto en cualquier página, archívalo en un Contexto de investigación y revisa/exporta tus notas en Markdown.",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Context Highlighter sidebar"
+  },
+  "side_panel": {
+    "default_path": "sidebar.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["storage.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

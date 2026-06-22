@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Context Highlighter</title>
+    <link rel="stylesheet" href="sidebar.css" />
+  </head>
+  <body>
+    <div class="chrome-bar">
+      <div class="logo">C</div>
+      <div class="title">Context Highlighter</div>
+      <button id="theme-toggle" class="icon-btn" title="Cambiar tema">◐</button>
+    </div>
+
+    <div class="layout">
+      <nav class="rail">
+        <div id="rail-list"></div>
+        <button id="rail-add" class="rail-add" title="Nuevo contexto">+</button>
+      </nav>
+
+      <section class="main">
+        <div id="ctx-header" class="ctx-header" hidden></div>
+        <div id="body"></div>
+      </section>
+    </div>
+
+    <!-- Bundled locally; MV3 forbids remote code. These are CLASSIC scripts and
+         run before the deferred ES module below, so they attach their globals
+         (marked, DOMPurify, Monaco's require, window.ContextStore) in time.
+         marked + DOMPurify MUST load before Monaco's AMD loader. -->
+    <script src="vendor/lib/marked.min.js"></script>
+    <script src="vendor/lib/purify.min.js"></script>
+    <script src="vendor/monaco/vs/loader.js"></script>
+    <script src="storage.js"></script>
+    <script type="module" src="sidebar.js"></script>
+  </body>
+</html>

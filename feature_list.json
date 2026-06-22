@@ -1,0 +1,141 @@
+{
+  "project": "context-highlighter",
+  "description": "Chrome MV3 extension: highlight text on any page, file it under a color-coded Context, review/export as Markdown from a side panel. Features go through Researcher → Spec-Writer → [Human Approval] → Tester → Implementer → Reviewer. The shipped code lives in outputs/ (the unpacked extension); verification is defined in docs/verification.md (node --check + buildMd/parseMd round-trip + manual Chrome load).",
+  "rules": {
+    "one_feature_at_a_time": true,
+    "require_human_approval_before_tester": true,
+    "require_tests_to_close": true,
+    "require_spec_to_start": true,
+    "max_retry_cycles": 3,
+    "valid_status": ["pending", "in_progress", "done", "blocked"]
+  },
+  "features": [
+    {
+      "id": 1,
+      "name": "vista_item_actions",
+      "title": "Editar/borrar por ítem en la Vista",
+      "description": "Hoy la Vista es solo preview de Markdown y la edición vive en el Editor (Monaco). Permitir editar y borrar una nota individual desde la Vista sin entrar al Editor, invalidando el buffer del editor para ese contexto.",
+      "acceptance_criteria": [
+        "Al pasar el cursor sobre una nota aparecen acciones editar/borrar.",
+        "Editar convierte la nota en input/textarea inline; Enter/blur confirma, Esc cancela.",
+        "Borrar elimina la nota de inmediato y persiste en chrome.storage.local.",
+        "Cualquier cambio invalida el buffer del editor del contexto (editor.invalidate)."
+      ],
+      "spec_path": "docs/spec_vista_item_actions.md",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 2,
+      "name": "preview_group_by_page",
+      "title": "Agrupar el preview por página de origen",
+      "description": "En la Vista (preview Markdown) agrupar las notas por sourceUrl/dominio, mostrando el dominio como encabezado una sola vez por grupo.",
+      "acceptance_criteria": [
+        "Notas consecutivas del mismo sourceUrl se muestran bajo un encabezado de página con su dominio.",
+        "El dominio no se repite por nota dentro del grupo.",
+        "No rompe el contrato buildMd/parseMd ni el export .md."
+      ],
+      "spec_path": null,
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "name": "capture_keyboard_shortcuts",
+      "title": "Atajos 1–4 para categoría al capturar",
+      "description": "Asignar categoría (Título/Idea/Argumento/Evidencia) con teclas 1–4 en el popup de captura, sin chocar con escribir el nombre del contexto en el combobox.",
+      "acceptance_criteria": [
+        "Las teclas 1–4 seleccionan categoría cuando el foco NO está en el input del combobox.",
+        "Escribir en el combobox nunca dispara los atajos.",
+        "El swatch activo refleja la selección."
+      ],
+      "spec_path": null,
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "name": "page_highlight_persistence",
+      "title": "Persistir/limpiar resaltados en la página",
+      "description": "Hoy los resaltados .ch-hl-* solo se marcan al guardar y no se re-aplican al recargar ni se pueden quitar. Persistir los rangos y re-aplicarlos al cargar la página, con opción de limpiar.",
+      "acceptance_criteria": [
+        "Al recargar una página, sus resaltados guardados se vuelven a pintar.",
+        "Existe una forma de quitar un resaltado de la página.",
+        "El re-aplicado degrada con seguridad si el DOM cambió (no rompe la página)."
+      ],
+      "spec_path": null,
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "name": "category_indicators",
+      "title": "Badges semánticos para indicadores de categoría",
+      "description": "Los emojis 🟡🔵🟢 en la Vista y los cuadraditos de 12 px en el popup no comunican significado sin memorizar el código de color. Reemplazarlos por badges de texto + fondo tintado (patrón Notion/Linear), ubicados en la fila de metadatos de cada ítem. El cambio requiere migrar la Vista de render Markdown a render item-by-item, lo que también cierra la Feature #1.",
+      "acceptance_criteria": [
+        "Cada ítem de tipo text en la Vista muestra un badge [Idea]/[Argumento]/[Evidencia] en su fila de metadatos.",
+        "Ningún ítem muestra emojis 🟡/🔵/🟢 en la Vista (sí siguen apareciendo en el Editor).",
+        "El botón activo en el popup de captura muestra fondo tintado del color de la categoría, no un ring.",
+        "El indicador de color en el popup es un círculo de 8 px, no un cuadrado.",
+        "Los badges tienen overrides correctos en dark mode.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "docs/spec_category_indicators.md",
+      "dependencies": [1],
+      "status": "done"
+    },
+    {
+      "id": 6,
+      "name": "semantic_hierarchy",
+      "title": "Jerarquía semántica y accesibilidad en la Vista (WCAG)",
+      "description": "Dar más importancia semántica a cada texto del panel lateral siguiendo criterios WCAG 2.1. Subtítulos como <h3>, notas de texto como <p> dentro de <li>/<ul>, ícono único por categoría (no solo color, SC 1.4.1), borde izquierdo tintado por categoría para refuerzo visual, mejor espaciado tipográfico. Eliminar el URL/dominio fuente que aparece debajo de cada nota.",
+      "acceptance_criteria": [
+        "Los subtítulos se renderizan como <h3> (no <div>) dentro de <li>.",
+        "Las notas de texto se renderizan como <p> (no <div>) dentro de <li> dentro de <ul role='list'>.",
+        "Cada badge de categoría muestra un símbolo único además del color (§ Título, ◈ Idea, → Argumento, ✓ Evidencia), satisfaciendo WCAG SC 1.4.1.",
+        "Cada ítem de texto tiene un borde izquierdo de 3 px tintado con el color semántico de su categoría.",
+        "El dominio/URL fuente ya NO aparece en la fila de metadatos de ninguna nota.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "docs/spec_semantic_hierarchy.md",
+      "dependencies": [5],
+      "status": "done"
+    },
+    {
+      "id": 7,
+      "name": "subtitle_nest_select",
+      "title": "Select de subtítulo en el popup de captura",
+      "description": "Reemplazar el checkbox 'Anidar bajo [último subtítulo]' por un <select> que lista todos los subtítulos del contexto seleccionado, permitiendo elegir bajo cuál anidar (o ninguno).",
+      "acceptance_criteria": [
+        "La fila de anidación muestra un <select> con 'Sin subtítulo' como primera opción + una opción por cada subtítulo del contexto.",
+        "La fila se oculta cuando la categoría es 'Título' (type === subtitle) o cuando el contexto seleccionado no tiene subtítulos.",
+        "Al guardar, el linkedSubtitleId toma el valor del option seleccionado (null si 'Sin subtítulo').",
+        "El select se repuebla al cambiar de contexto o de categoría.",
+        "El select tiene el estilo consistente con el resto del popup (tokens ch-).",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "docs/spec_subtitle_nest_select.md",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 8,
+      "name": "vite_pnpm_migration",
+      "title": "Migración a Vite + pnpm + @crxjs/vite-plugin",
+      "description": "Crear un nuevo proyecto Vite con @crxjs/vite-plugin y pnpm como gestor de paquetes. Adaptar la extensión MV3 actual (content script, storage, popup/side-panel) a la arquitectura ESM nativa de Vite, con HMR automático para desarrollo. El resultado es un nuevo directorio de proyecto (raíz o subdir separado) que reemplaza el flujo manual de outputs/.",
+      "acceptance_criteria": [
+        "pnpm install y pnpm run dev arrancan sin errores.",
+        "pnpm run build genera un dist/ listo para cargar en Chrome.",
+        "content.js se inyecta como content script con HMR en dev.",
+        "storage.js es un módulo ES importable tanto desde content.js como desde el popup/panel.",
+        "popup.html o sidebar.html cargan como módulos ES vía CRXJS.",
+        "manifest.json está bajo control de Vite/CRXJS (no editado a mano post-build).",
+        "No hay CDNs ni código remoto (MV3 CSP).",
+        "node --check pasa en todos los archivos JS del proyecto."
+      ],
+      "spec_path": "docs/spec_vite_pnpm_migration.md",
+      "dependencies": [],
+      "status": "in_progress"
+    }
+  ]
+}
