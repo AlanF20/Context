@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Context Highlighter",
+  "version": "2.0.0",
+  "description": "Resalta texto en cualquier página y archívalo por contexto de investigación.",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Context Highlighter sidebar"
+  },
+  "side_panel": {
+    "default_path": "src/sidebar.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

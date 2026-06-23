@@ -119,6 +119,23 @@
       "status": "done"
     },
     {
+      "id": 9,
+      "name": "visual_separators",
+      "title": "Separadores visuales como tipo de ítem",
+      "description": "Añadir un tipo de ítem 'separator' al modelo de datos. Un separador es un divisor visual sin texto que el usuario puede insertar entre notas en el popup de captura o desde el popup de gestión. No tiene text, category ni linkedSubtitleId.",
+      "acceptance_criteria": [
+        "addSeparator(contextId) guarda un item de type:'separator' en chrome.storage.local.",
+        "El popup de gestión renderiza los separadores como una línea horizontal entre ítems.",
+        "exportContextToText renderiza los separadores como una línea de guiones.",
+        "buildMd/parseMd manejan los separadores con una línea '---' en Markdown.",
+        "Los separadores no muestran badge ni texto en la Vista.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": null,
+      "dependencies": [8],
+      "status": "pending"
+    },
+    {
       "id": 8,
       "name": "vite_pnpm_migration",
       "title": "Migración a Vite + pnpm + @crxjs/vite-plugin",
@@ -135,7 +152,26 @@
       ],
       "spec_path": "docs/spec_vite_pnpm_migration.md",
       "dependencies": [],
-      "status": "in_progress"
+      "status": "done"
+    },
+    {
+      "id": 10,
+      "name": "vite_sidebar_parity",
+      "title": "Portar side panel a vite-extension (paridad con outputs/)",
+      "description": "vite-extension fue creado en Feature #8 como build popup-only. Desde entonces, outputs/ recibió Features #1, #5, #6, #7: side panel persistente, Vista con HTML semántico, badges de categoría, acciones inline editar/borrar, Monaco editor, nest-select. Esta feature porta todo el side panel a vite-extension/src/, actualiza el manifest para usar sidePanel en lugar de action.default_popup, adapta los imports a ESM nativo de Vite, e integra Monaco como vendor o dependencia Vite.",
+      "acceptance_criteria": [
+        "vite-extension usa 'sidePanel' + permiso 'sidePanel' en lugar de 'action.default_popup'.",
+        "sidebar.html, sidebar.css, sidebar.js y todos los módulos sidebar/*.js existen en vite-extension/src/.",
+        "La Vista renderiza HTML semántico, badges de categoría (§ ◈ → ✓), acciones inline (editar/borrar por ítem), a paridad con outputs/sidebar/vista.js.",
+        "Monaco editor carga y sincroniza con chrome.storage.local en el modo Editor.",
+        "pnpm run build genera un dist/ funcional que incluye el side panel.",
+        "pnpm run dev funciona con HMR en los archivos del side panel.",
+        "El contenido del rail (chips de contexto) y el toggle Vista/Editor funcionan a paridad con outputs/.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "docs/spec_vite_sidebar_parity.md",
+      "dependencies": [8],
+      "status": "done"
     }
   ]
 }

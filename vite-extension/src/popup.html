@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Context Highlighter</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="ch-header">
+      <span class="ch-logo">Context Highlighter</span>
+      <button id="btn-new" class="ch-btn ch-btn-ghost ch-btn-sm">+ Nuevo</button>
+    </header>
+
+    <form id="form-new" class="ch-form-new" hidden>
+      <input id="input-name" type="text" class="ch-input"
+             placeholder="Nombre del contexto…" autocomplete="off" />
+      <div class="ch-form-actions">
+        <button type="button" id="btn-cancel-new"
+                class="ch-btn ch-btn-ghost ch-btn-sm">Cancelar</button>
+        <button type="submit" class="ch-btn ch-btn-sm">Crear</button>
+      </div>
+    </form>
+
+    <ul id="ctx-list" class="ch-ctx-list" role="list"></ul>
+
+    <p id="empty-state" class="ch-empty" hidden>
+      Sin contextos aún.<br />Resalta texto en cualquier página para empezar.
+    </p>
+
+    <section id="detail" class="ch-detail" hidden>
+      <div class="ch-detail-header">
+        <h2 id="detail-title" class="ch-detail-title"></h2>
+        <button id="btn-download" class="ch-btn ch-btn-sm">↓ .txt</button>
+      </div>
+      <ul id="items-list" class="ch-items-list" role="list"></ul>
+    </section>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

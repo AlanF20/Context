@@ -1,0 +1,295 @@
+/*
+ * content.css — in-page capture UI (DESIGN_SPEC §2.1)
+ * --------------------------------------------------------------------------
+ * Everything is scoped under `.ch-root` with a `ch-` prefix and a hard style
+ * reset so the host page cannot bleed in and we cannot bleed out. Tokens are
+ * defined ON the `.ch-root` container only — the host page never inherits the
+ * theme. The page highlight `.ch-hl` is the one intentional exception (it
+ * marks the saved selection on the page itself).
+ * --------------------------------------------------------------------------
+ */
+
+.ch-root {
+  all: revert;
+  box-sizing: border-box;
+  /* Tokens (light) scoped to our UI only */
+  --bg: #ffffff;
+  --surface-2: #f6f5f2;
+  --surface-3: #edece6;
+  --border: #e7e6e0;
+  --border-strong: #dad8d0;
+  --fg: #262620;
+  --fg-2: #6c6b62;
+  --fg-3: #9b998e;
+  --accent: #5b57e8;
+  --accent-fg: #ffffff;
+  --accent-soft: #ecebfd;
+  --accent-border: #ccc9f7;
+  --shadow-lg: rgba(38, 38, 28, 0.16);
+  --ui: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-family: var(--ui);
+  color: var(--fg);
+  z-index: 2147483647;
+  -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) {
+  .ch-root {
+    --bg: #1c1c1f;
+    --surface-2: #2a2a2f;
+    --surface-3: #313138;
+    --border: #2e2e34;
+    --border-strong: #3c3c44;
+    --fg: #ededee;
+    --fg-2: #a2a1a9;
+    --fg-3: #6e6d76;
+    --accent: #8b88f7;
+    --accent-fg: #17171b;
+    --accent-soft: #272451;
+    --accent-border: #403d7e;
+    --shadow-lg: rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ---- Micro-icon (collapsed trigger) ---- */
+.ch-icon {
+  width: fit-content;
+  padding: 4px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px var(--shadow-lg);
+  user-select: none;
+  transition: transform 0.08s ease;
+}
+.ch-icon:hover { transform: scale(1.08); }
+
+/* ---- Capture popup ---- */
+.ch-pop {
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 14px 40px var(--shadow-lg);
+  padding: 13px;
+  font-size: 13px;
+}
+
+.ch-pop-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.ch-pop-title { font-size: 14px; font-weight: 700; }
+.ch-pop-ctx { font-family: var(--mono); font-size: 10.5px; color: var(--fg-3); }
+
+.ch-quote {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-2);
+  border-left: 3px solid var(--accent);
+  padding: 2px 0 2px 10px;
+  margin-bottom: 11px;
+  max-height: 76px;
+  overflow: auto;
+}
+
+.ch-control-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 9px;
+}
+
+/* Context combobox (pill + dot + chevron) */
+.ch-combo {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ch-combo-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+.ch-combo-pill:focus-within { border-color: var(--accent-border); }
+.ch-combo-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.ch-combo-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--ui);
+  font-size: 12.5px;
+  outline: none;
+}
+.ch-combo-chevron {
+  border: none;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+}
+.ch-combo-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 8px 24px var(--shadow-lg);
+  max-height: 180px;
+  overflow: auto;
+  z-index: 2;
+  padding: 4px;
+}
+.ch-combo-menu[hidden] { display: none; }
+.ch-combo-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.ch-combo-opt:hover { background: var(--surface-2); }
+.ch-combo-opt .new { color: var(--accent); font-weight: 700; }
+
+/* Category (color) selector — 4 swatches with labels */
+.ch-cats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-bottom: 9px;
+}
+.ch-cat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1.5px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-family: var(--ui);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.ch-cat:hover { background: var(--surface-3); }
+.ch-cat .sw { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.ch-cat.on {
+  background: var(--cat-bg, var(--accent-soft));
+  border-color: var(--cat, var(--accent));
+  color: var(--cat-fg, var(--fg));
+}
+
+/* Nest row */
+.ch-nest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 9px;
+  margin-bottom: 9px;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.ch-nest[hidden] { display: none; }
+.ch-nest-label { white-space: nowrap; }
+.ch-nest-sel {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: var(--ui);
+  color: var(--fg);
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.ch-nest-sel:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Microcopy */
+.ch-microcopy {
+  font-size: 11px;
+  color: var(--fg-3);
+  margin-bottom: 11px;
+}
+
+/* Actions */
+.ch-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.ch-btn {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: var(--ui);
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ch-btn:hover { filter: brightness(0.96); }
+.ch-btn-ghost {
+  background: transparent;
+  color: var(--fg-2);
+  border-color: var(--border);
+}
+.ch-btn-ghost:hover { background: var(--surface-2); filter: none; }
+.ch-kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.ch-status { margin-top: 9px; font-size: 12px; color: #1a7f37; font-weight: 600; }
+.ch-status.ch-status-error { color: #d4564f; }
+.ch-status[hidden] { display: none; }
+
+/* ---- Page highlight (intentionally affects the host page) ----
+   Colors differ by category so the highlight on the source page matches
+   the meaning. Each keeps a dark, legible text color on its pastel bg. */
+.ch-hl {
+  background: #fdeaa8;
+  color: #3a2f0b;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.ch-hl-title { background: #f6b8c4; color: #5a1020; }
+.ch-hl-idea { background: #fdeaa8; color: #6a5413; }
+.ch-hl-argument { background: #bcd3f5; color: #14315f; }
+.ch-hl-evidence { background: #bfe6c8; color: #16432a; }
