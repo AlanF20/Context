@@ -1,0 +1,23 @@
+{
+  "id": 17,
+  "status": "approved",
+  "createdAt": "2026-06-24",
+  "author": "harness/spec-writer",
+  "title": "Fix carga de Monaco en Vite (ruta AMD relativa)",
+  "description": "En la build de Vite, sidebar.html se sirve desde chrome-extension://<id>/src/sidebar.html, pero editor.js configura req.config con la ruta relativa 'vendor/monaco/vs'. El AMD loader de Monaco resuelve esa ruta relativa respecto a la URL base de la página (/src/), por lo que busca los módulos en /src/vendor/monaco/vs en lugar de /vendor/monaco/vs. La fix reemplaza la cadena relativa por chrome.runtime.getURL('vendor/monaco/vs'), que devuelve siempre la URL absoluta correcta desde la raíz de la extensión.",
+  "acceptance_criteria": [
+    "El Editor muestra Monaco correctamente (área de código oscura, cursor de texto, contenido Markdown) al activar la pestaña Editor en el panel lateral.",
+    "No aparece el mensaje 'No se pudo cargar el editor / Verifica la carpeta vendor/monaco'.",
+    "vite-extension/src/sidebar/editor.js línea 125 usa chrome.runtime.getURL('vendor/monaco/vs') en lugar de la cadena literal 'vendor/monaco/vs'.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation": {
+    "files_changed": ["vite-extension/src/sidebar/editor.js"],
+    "diff_summary": "Una línea cambiada: req.config({ paths: { vs: 'vendor/monaco/vs' } }) → req.config({ paths: { vs: chrome.runtime.getURL('vendor/monaco/vs') } })",
+    "no_data_model_changes": true,
+    "no_ui_changes": true,
+    "no_css_changes": true
+  },
+  "dependencies": [10]
+}

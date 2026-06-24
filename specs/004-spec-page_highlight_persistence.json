@@ -1,0 +1,53 @@
+{
+  "id": 4,
+  "status": "approved",
+  "createdAt": "2026-06-24",
+  "author": "Spec-Writer Agent",
+  "title": "Persistir/limpiar resaltados en la página",
+  "description": "El content script re-aplica automáticamente los resaltados guardados cuando el usuario recarga una página, usando un TextQuoteSelector minimalista (rangePrefix + text + rangeSuffix). Al borrar un ítem desde la Vista del sidebar, el mark correspondiente se elimina del DOM de la página mediante mensajería chrome.runtime. Sin dependencias npm nuevas; 100% compatible con MV3.",
+  "acceptance_criteria": [
+    "Al recargar una página que tiene ítems guardados para esa URL, el content script aplica <mark class='ch-hl ch-hl-{category}' data-ch-id='{item.id}'> a cada ítem cuyo rangePrefix y rangeSuffix permiten localizar el texto.",
+    "El re-highlight ocurre en el evento 'document_idle' (ya declarado en manifest.json), envuelto en requestIdleCallback con timeout 2000 ms.",
+    "Si un ítem no puede anclarse (texto no encontrado, rangePrefix null, o múltiples coincidencias ambiguas sin suffix único), se omite silenciosamente sin lanzar excepción ni romper la página.",
+    "El algoritmo de búsqueda usa dos niveles: (1) coincidencia exacta normalizada de prefix+text+suffix; (2) fallback a solo text si hay exactamente una ocurrencia en el documento.",
+    "Cada <mark> lleva el atributo data-ch-id con el id del ítem, tanto en el marcado en tiempo real (al guardar) como en el re-aplicado (al recargar).",
+    "addItem() en storage.js y content-storage.js acepta dos nuevos campos opcionales: rangePrefix (string|null) y rangeSuffix (string|null), ambos con máximo 50 caracteres.",
+    "El content script extrae rangePrefix y rangeSuffix del savedRange en el momento de doSave(), antes de llamar addItem().",
+    "Los campos rangePrefix/rangeSuffix son null para ítems creados desde el editor Markdown (parseMd/replaceContextFromMarkdown) — compatibilidad hacia atrás total.",
+    "buildMd y parseMd no cambian: rangePrefix/rangeSuffix son metadata de posición DOM, no pertenecen al contrato Markdown.",
+    "Al borrar un ítem desde la Vista (botón delBtn), sidebar/vista.js envía chrome.tabs.sendMessage({ type: 'CH_REMOVE_HL', itemId }) al tab activo.",
+    "content.js escucha chrome.runtime.onMessage; al recibir CH_REMOVE_HL busca document.querySelector('[data-ch-id=\"{itemId}\"]') y hace unwrap del <mark> (reemplaza por sus hijos de texto).",
+    "El envío de chrome.tabs.sendMessage desde vista.js está envuelto en try/catch; si el content script no está cargado en ese tab, el error se loguea con console.warn y no se propaga.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_notes": {
+    "files_changed": [
+      "src/storage.js — addItem() añade rangePrefix/rangeSuffix al objeto item",
+      "src/content-storage.js — misma modificación que storage.js en addItem()",
+      "src/content.js — (1) extraer prefix/suffix del savedRange en doSave(); (2) añadir reapplyHighlights() llamada al inicio; (3) añadir removeHighlightById() y listener onMessage; (4) añadir data-ch-id al <mark> en highlightSavedRange() y en re-aplicación",
+      "src/sidebar/vista.js — en delBtn.click, tras deleteItem(), enviar CH_REMOVE_HL al tab activo"
+    ],
+    "files_unchanged": [
+      "src/content.css — clases ch-hl-* ya existen",
+      "src/sidebar.html",
+      "src/sidebar.css",
+      "src/sidebar.js",
+      "src/sidebar/dom.js",
+      "src/sidebar/markdown.js",
+      "src/sidebar/theme.js",
+      "src/sidebar/rail.js",
+      "src/sidebar/editor.js",
+      "src/sidebar/store.js",
+      "src/background.js",
+      "manifest.json"
+    ],
+    "approach": "TextQuoteSelector minimalista (snippet anclado: rangePrefix + item.text + rangeSuffix, ≤50 chars cada uno). TreeWalker itera nodos de texto del documento; búsqueda normalizada de espacios. Sin dependencias npm adicionales.",
+    "out_of_scope_v1": [
+      "MutationObserver para SPAs (re-highlight tras renderizado dinámico) — fase 2",
+      "Click en <mark> para mostrar tooltip de borrado — fase 2",
+      "Shadow DOM / iframes — fuera de scope"
+    ]
+  },
+  "dependencies": []
+}

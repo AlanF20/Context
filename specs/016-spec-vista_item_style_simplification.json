@@ -1,0 +1,37 @@
+{
+  "id": 16,
+  "status": "approved",
+  "createdAt": "2026-06-24",
+  "author": "harness/spec-writer",
+  "title": "Simplificar estilo de ítems en la Vista",
+  "description": "Rediseño visual de los ítems de texto en la Vista: eliminar el badge de categoría (redundante con el borde izquierdo de color), eliminar border-radius en los ítems, conservar solo el borde lateral izquierdo de color semántico, y cambiar el espaciado a margin-top de 8px entre cajas de texto.",
+  "acceptance_criteria": [
+    "Ningún ítem de texto muestra el badge de categoría (§ Título, ◈ Idea, → Argumento, ✓ Evidencia).",
+    "Los ítems de texto no tienen border-radius (esquinas cuadradas).",
+    "El borde lateral izquierdo de 3px de color semántico sigue presente por categoría (title/idea/argument/evidence).",
+    "Cada ítem de tipo text tiene margin-top: 8px; el primer ítem de la lista tiene margin-top: 0.",
+    "Los bloques CSS .vista-cat-badge, .badge-title, .badge-idea, .badge-argument, .badge-evidence y sus overrides dark-mode se eliminan de sidebar.css.",
+    "El bloque DOM .vista-item-meta y el <span>.vista-cat-badge se eliminan de buildItem() en vista.js.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_notes": {
+    "js_changes": [
+      "vista.js buildItem(): eliminar el bloque `if (item.category && CAT_LABEL[item.category]) { const meta = ... }` (líneas ~62-70).",
+      "La constante CAT_LABEL puede eliminarse también si no queda ningún uso."
+    ],
+    "css_changes": [
+      "sidebar.css .vista-item: eliminar border-radius: 8px; cambiar margin-bottom: 2px por nada (el spacing lo da margin-top en text items).",
+      "sidebar.css .vista-item-text: añadir margin-top: 8px.",
+      "sidebar.css .vista-item-text:first-child: añadir margin-top: 0 para el primer ítem.",
+      "Eliminar bloques: .vista-cat-badge, .badge-title, .badge-idea, .badge-argument, .badge-evidence, :root[data-theme=dark] .badge-*, .badge-*::before."
+    ]
+  },
+  "trade_offs": {
+    "wcag_1_4_1": "La combinación badge+borde satisfacía WCAG SC 1.4.1 (no solo color). Con este cambio, el borde izquierdo de color es el único diferenciador visual de categoría. El usuario ha solicitado explícitamente esta simplificación; queda documentado que la accesibilidad se apoya ahora solo en el borde de color."
+  },
+  "dependencies": [6],
+  "files_to_touch": [
+    "vite-extension/src/sidebar/vista.js",
+    "vite-extension/src/sidebar.css"
+  ]
+}

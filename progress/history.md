@@ -8,162 +8,120 @@ _No sessions recorded yet._
 
 ---
 
-## Sesión 2026-06-22 — vite_sidebar_parity (id: 10)
+## Session 2026-06-24 — Feature 18: preview_doc_editor
 
-- **Feature:** `#10 vite_sidebar_parity` — Portar side panel a vite-extension (paridad con outputs/)
-- **Status at close:** done
-- **Retry count:** 0 / 3
-- **Spec aprobada:** sí
+**Result:** done ✅
 
-### Cambios implementados
+**Changes:**
+- `vite-extension/src/sidebar/vista.js` — full rewrite: removed item-loop + `startEdit`; now exports `renderVista` (marked preview) + `createDocEditor` (textarea controller)
+- `vite-extension/src/sidebar.js` — added `"vista-edit"` mode, pencil/Listo header buttons, `afterDocEditorSync`, flush guards in all navigation handlers
+- `vite-extension/src/sidebar.css` — removed `.vista-list / .vista-item / .vista-actions / .vista-btn-* / .vista-edit-ta`; added `.vista-md-preview` + `.vista-edit-doc`
+- `feature_list.json` — feature 18 added and marked `in_progress` (→ `done` below)
+- `specs/018-spec-preview_doc_editor.json` — created (approved)
+- `docs/research_preview_doc_editor.md` — created
+- `docs/test_preview_doc_editor.md` — created
 
-**Dependencias nuevas:**
-- `pnpm add marked dompurify` en `vite-extension/`
-
-**Vendor copiado:**
-- `outputs/vendor/lib/` → `vite-extension/public/vendor/lib/`
-- `outputs/vendor/monaco/` → `vite-extension/public/vendor/monaco/`
-
-**Archivos nuevos en `vite-extension/src/`:**
-- `sidebar.html` — entry point del side panel (Monaco loader como script clásico; módulo `sidebar.js` diferido)
-- `sidebar.css` — copiado idéntico de `outputs/sidebar.css`
-- `sidebar.js` — copiado idéntico de `outputs/sidebar.js`
-- `sidebar/dom.js` — copiado idéntico
-- `sidebar/theme.js` — copiado idéntico
-- `sidebar/rail.js` — copiado idéntico
-- `sidebar/vista.js` — copiado idéntico
-- `sidebar/editor.js` — copiado idéntico
-- `sidebar/store.js` — adaptado: `window.ContextStore` → `import * as StoreNS from '../storage.js'; export const Store = StoreNS`
-- `sidebar/markdown.js` — adaptado: globals `window.marked`/`window.DOMPurify` → `import { marked } from 'marked'; import DOMPurify from 'dompurify'`
-
-**Archivos modificados:**
-- `vite-extension/manifest.json` — v2.0.0; añadido permiso `sidePanel`; añadido `side_panel.default_path`; eliminado `action.default_popup`
-- `vite-extension/src/background.js` — añadido `chrome.action.onClicked` → `chrome.sidePanel.open()`
-
-### Documentos generados
-
-- `docs/research_vite_sync.md`
-- `docs/spec_vite_sidebar_parity.md`
-- `docs/test_vite_sidebar_parity.md`
-
-### Verificación
-
-- `pnpm run build` ✅ sin errores (15 módulos transformados)
-- `dist/manifest.json` ✅ tiene `sidePanel`, `side_panel.default_path`, sin `action.default_popup`
-- `dist/vendor/` ✅ Monaco incluido (13 MB copiados desde public/)
-- `node --check` ✅ 11/11 archivos JS de `vite-extension/src/` sin errores de sintaxis
-- `init.sh` ✅ verde (10 features en feature_list.json, todos los outputs/ OK)
-- Verificación manual en Chrome: pendiente (cargar `vite-extension/dist/` en chrome://extensions)
+**Build:** `pnpm run build` ✅ · `init.sh` ✅
 
 ---
 
-## Sesión 2026-06-22 — subtitle_nest_select (id: 7)
+## Session 2026-06-24 — Feature #4: page_highlight_persistence
 
-- **Feature:** `#7 subtitle_nest_select` — Select de subtítulo en el popup de captura
-- **Status at close:** done
-- **Retry count:** 0 / 3
-- **Spec aprobada:** sí
-
-### Cambios implementados
-
-- `outputs/content.js`: `popupSkeleton()` — checkbox + label → `<select data-role="nest-select">`. `openPopup()` — `nestToggle`/`subName` → `nestSelect`. `refreshNest()` — repuebla el select con todos los subtítulos, pre-selecciona el último. `doSave()` — lee `nestSelect.value` en vez de `nestToggle.checked`. Eliminada la variable `lastSubtitle`.
-- `outputs/content.css`: eliminados `.ch-nest input` y `.ch-nest .sub-name`. Añadidos `.ch-nest-label` y `.ch-nest-sel` (con `:focus`).
-
-### Documentos generados
-
-- `docs/research_subtitle_nest_select.md`
-- `docs/spec_subtitle_nest_select.md`
-- `docs/test_subtitle_nest_select.md`
-
-### Verificación
-
-- `init.sh` verde (todos los `node --check` OK, manifest JSON válido).
-- Verificación manual en Chrome pendiente (recargar extensión).
+- **Status:** done
+- **Spec:** specs/004-spec-page_highlight_persistence.json (approved)
+- **Files changed:**
+  - `vite-extension/src/storage.js` — addItem() + rangePrefix/rangeSuffix fields
+  - `vite-extension/src/content-storage.js` — same
+  - `vite-extension/src/content.js` — TextQuoteSelector engine, reapplyHighlights(), removeHighlightById(), CH_REMOVE_HL listener, data-ch-id on marks
+  - `vite-extension/src/sidebar/vista.js` — sends CH_REMOVE_HL on item delete
+- **Approach:** TextQuoteSelector minimalista (rangePrefix + text + rangeSuffix, ≤50 chars each). TreeWalker text index rebuilt per item for accuracy. Two-level fallback: anchored → unique exact.
+- **Reviewer:** init.sh green, pnpm run build green (447ms, no errors).
 
 ---
 
-## Session 2026-06-22 — Feature #6: semantic_hierarchy
+## Session 2026-06-24 — Feature 17: monaco_amd_path_fix
 
-- **Feature:** `#6 semantic_hierarchy` — Jerarquía semántica y accesibilidad en la Vista (WCAG)
-- **Status at close:** done
+- **Status:** done
+- **Root cause:** AMD `req.config` used relative path `"vendor/monaco/vs"`. In the Vite build, `sidebar.html` is served from `chrome-extension://<id>/src/`, so the AMD loader resolved the path to `/src/vendor/monaco/vs` instead of `/vendor/monaco/vs`.
+- **Fix:** 1 line in `vite-extension/src/sidebar/editor.js:125` — replaced `"vendor/monaco/vs"` with `chrome.runtime.getURL("vendor/monaco/vs")`.
+- **Artifacts:** `docs/research_monaco_amd_path_fix.md`, `specs/017-spec-monaco_amd_path_fix.json`, `docs/test_monaco_amd_path_fix.md`.
+- **Checks:** `init.sh` green, `pnpm run build` green.
+
+---
+
+## Session 2026-06-24 — Feature 19: list_structure_capture
+
+- **Status:** done ✅
+- **Spec:** `specs/019-spec-list_structure_capture.json` (implemented)
+- **Files changed:**
+  - `vite-extension/src/content.js` — added `fragmentToMarkdown` + helpers (`_nodeToMd`, `_listToMd`, `_liToMd`, `_childrenToMd`); updated mouseup handler to use `fragmentToMarkdown(range.cloneContents())` and fall back to `sel.toString()` when no list elements are found
+  - `vite-extension/src/content.css` — added `white-space: pre-wrap` to `.ch-quote-text`
+  - `vite-extension/src/storage.js` — `buildMd`: multi-line items fenced as GFM blockquotes; `parseMd`: consecutive `>` lines grouped into a single item
+  - `feature_list.json` — feature 19 added as `done`, `spec_path` set
+  - `specs/019-spec-list_structure_capture.json` — created (implemented)
+  - `docs/research_list_structure_capture.md` — created
+  - `docs/test_list_structure_capture.md` — created
+- **Approach:** Option A (convert at capture time). `fragmentToMarkdown` walks the `DocumentFragment` from `cloneContents()` and converts `<ul>/<ol>/<li>` to Markdown bullets/numbers with 2-space indent per nesting level. Returns `null` for non-list selections so the caller keeps the existing plain-text path. `buildMd`/`parseMd` extended for multi-line round-trip correctness via GFM blockquote fencing.
+- **Checks:** `init.sh` ✅ · `pnpm run build` ✅ (492ms, no errors)
+
+---
+
+## Session 2026-06-24 — Feature 16: vista_item_style_simplification
+
+- **Feature:** `vista_item_style_simplification` (id: 16)
+- **Started:** 2026-06-24
+- **Closed:** 2026-06-24
 - **Retry count:** 0 / 3
+- **Spec approved by human:** ✅ 2026-06-24
+- **Result:** ✅ done
+
+### Plan executed
+1. ✅ init.sh — green (fixed feature 15 spec_path → `specs/015-spec-nest_selector_redesign.json`)
+2. ✅ Feature 16 added to feature_list.json
+3. ✅ Researcher → `docs/research_vista_item_style_simplification.md`
+4. ✅ Spec-Writer → `specs/016-spec-vista_item_style_simplification.json`
+5. ✅ Human approval gate — approved
+6. ✅ Tester → `docs/test_vista_item_style_simplification.md`
+7. ✅ Implementer → `vite-extension/src/sidebar.css` + `vite-extension/src/sidebar/vista.js`
+8. ✅ Reviewer → init.sh green + pnpm run build green (8.86 kB CSS, 18.85 kB JS)
 
 ### Changes made
-- `outputs/sidebar/vista.js`: contenedor cambiado a `<ul role="list">`, wrappers a `<li>`, subtítulos a `<h3>`, texto a `<p>`, `data-category` añadido, bloque `item.source` eliminado, `restore()` corregido para preservar el tipo de elemento semántico.
-- `outputs/sidebar.css`: tokens `--cat-*-border` añadidos (light + dark), `list-style: none` en `.vista-list`, left-borders por `data-category`, símbolos únicos `::before` en badges (`§ ◈ → ✓`), margin resets para `<h3>` y `<p>`, estilos `.vista-item-source` eliminados.
-- `docs/research_semantic_hierarchy.md`: output del Researcher.
-- `docs/spec_semantic_hierarchy.md`: spec aprobada por humano.
-- `docs/test_semantic_hierarchy.md`: plan de verificación del Tester.
-- `feature_list.json`: feature #6 añadida y cerrada como `done`.
-
-### Verification
-- `init.sh` exitó verde (todos los `node --check` OK, manifest JSON válido).
-- Level 4 (carga manual en Chrome): pendiente — el usuario debe recargar la extensión.
+- `vite-extension/src/sidebar/vista.js`: removed `CAT_LABEL` constant and `.vista-item-meta` / `.vista-cat-badge` DOM creation block from `buildItem()`
+- `vite-extension/src/sidebar.css`: removed `border-radius: 8px` and `margin-bottom: 2px` from `.vista-item`; added `margin-top: 8px` on `.vista-item-text` (`:first-child` resets to 0); removed all `.vista-cat-badge`, `.badge-*`, dark-mode badge overrides, and `::before` symbol rules
+- `feature_list.json`: feature 15 `spec_path` fixed; feature 16 added as `done`
 
 ---
-
-## Sesión 2026-06-22 — vista_item_actions + category_indicators
-
-- **Features cerradas:** `vista_item_actions` (id: 1) + `category_indicators` (id: 5)
-- **Retry count:** 0 / 3
-- **Verificación:** ✅ aprobada por humano · init.sh verde
-
-### Nota de proceso
-
-Esta sesión saltó el gate de aprobación humana antes de implementar. La feature #5 fue analizada, especificada e implementada en el mismo turno sin esperar confirmación explícita. Queda registrado para evitar repetirlo. El flujo correcto es:
-
-```
-Researcher → Spec-Writer → [HUMAN APPROVAL] → Implementer → Reviewer
-```
-
-### Cambios implementados
-
-**Feature #1 — vista_item_actions**
-- `outputs/sidebar/vista.js`: reescritura completa — render item-by-item, acciones editar/borrar inline, firma actualizada a `renderVista(mountEl, ctx, { onMutate })`.
-- `outputs/sidebar.js`: añadida `vistaOnMutate()`, actualizada llamada a `renderVista`.
-- `outputs/sidebar.css`: añadidos `.vista-item`, `.vista-actions`, `.vista-btn-edit`, `.vista-btn-delete`, `.vista-edit-ta`.
-
-**Feature #5 — category_indicators**
-- `outputs/sidebar/vista.js`: cada `type:text` genera `.vista-cat-badge.badge-{category}` en fila `.vista-item-meta`.
-- `outputs/sidebar.css`: `.vista-cat-badge` con 4 variantes + overrides dark, `.vista-item-source` con `::before` dot.
-- `outputs/content.css`: `.ch-cat .sw` círculo 8 px; `.ch-cat.on` fondo tintado `--cat-bg/--cat-fg` en vez de ring.
-- `outputs/content.js`: `setProperty("--cat-bg", meta.hlBg)` + `setProperty("--cat-fg", meta.hlFg)` en construcción de botones.
-
-**Harness**
-- `docs/spec_category_indicators.md`: spec completa con análisis de referentes, DOM, tabla de colores y criterios de aceptación.
-- `feature_list.json`: features #1 y #5 marcadas `done`, #5 añadida al backlog.
 # Current session
 
 > Reset this file at the end of every session by appending its content to `history.md`.
 > Keep it updated **in real time** while working, not at the end.
 
-- **Feature in progress:** `vite_pnpm_migration` (id 8)
-- **Started:** 2026-06-22
-- **Active agent:** Spec-Writer
+- **Feature in progress:** `markdown_preview_category_borders` (ID: 20)
+- **Started:** 2026-06-24
+- **Active agent:** Spec-Writer (awaiting human approval)
 - **Retry count:** 0 / 3
 - **Spec approved by human:** _pending_
 
 ## Plan
 
-1. ✅ init.sh — verde
-2. ✅ Read progress/current.md — sesión limpia
-3. ✅ Añadir feature a feature_list.json (id 8, status: in_progress)
-4. ✅ Researcher → docs/research_vite_pnpm_migration.md
-5. ✅ Spec-Writer → docs/spec_vite_pnpm_migration.md
-6. ⛔ STOP — esperando aprobación humana
-7. Tester → docs/test_vite_pnpm_migration.md
-8. Implementer → crear directorio vite-extension/ con todos los archivos
-9. Reviewer → init.sh + verificación manual
-10. Cerrar sesión
+1. ✅ init.sh — green
+2. ✅ Read progress/current.md
+3. ✅ feature_list.json — feature 20 added with status `in_progress`
+4. ✅ Researcher — docs/research_markdown_preview_category_borders.md
+5. ✅ Spec-Writer — specs/020-spec-markdown_preview_category_borders.json (draft)
+6. ⏳ **STOP — esperando aprobación humana**
+7. ⬜ Tester — docs/test_markdown_preview_category_borders.md
+8. ⬜ Implementer — markdown.js + sidebar.css
+9. ⬜ Reviewer — init.sh + pnpm run build
+10. ⬜ Cerrar sesión
 
 ## Log
 
-- 2026-06-22: init.sh verde, sesión limpia
-- 2026-06-22: Feature id 8 añadida a feature_list.json (status: in_progress)
-- 2026-06-22: Research completada — 5 agentes (1 con web, 4 training data); síntesis en docs/research_vite_pnpm_migration.md
-- 2026-06-22: Spec escrita en docs/spec_vite_pnpm_migration.md — esperando aprobación
+- 2026-06-24: init.sh green, sesión limpia
+- 2026-06-24: Feature 20 registrada en feature_list.json
+- 2026-06-24: Research escrito en docs/research_markdown_preview_category_borders.md
+- 2026-06-24: Spec draft en specs/020-spec-markdown_preview_category_borders.json
 
 ## Next step
 
-⛔ Esperar que el usuario apruebe la spec. No tocar ningún archivo de código hasta entonces.
-
+Esperar aprobación del usuario en la spec antes de escribir cualquier archivo en vite-extension/.

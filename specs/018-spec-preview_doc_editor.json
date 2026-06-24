@@ -1,0 +1,52 @@
+{
+  "id": 18,
+  "status": "approved",
+  "createdAt": "2026-06-24T20:06:44Z",
+  "author": "harness/spec-writer",
+  "title": "Rich Markdown preview + document-level inline edit en Vista",
+  "description": "Reemplazar el render ítem-por-ítem de la Vista (con sus botones de editar/borrar por caja) por: (1) un preview enriquecido que usa marked para renderizar buildMd(ctx) completo — headings, bold, italic, emojis de categoría, fuentes en cursiva —, y (2) un modo de edición de documento completo donde el cuerpo se convierte en un <textarea> con el Markdown fuente, sin botones de edición individuales por ítem. La eliminación de ítems se delega a editar el Markdown directamente o al Editor Monaco. El tab 'Editor' (Monaco) no cambia.",
+  "acceptance_criteria": [
+    "La Vista renderiza marked(buildMd(ctx)) sanitizado con DOMPurify dentro de un <div class='vista-md-preview md'>; se visualizan headings (h1/h2), párrafos con emojis de categoría (🟡🔵🟢🔴), fuentes en cursiva, y cualquier otro elemento Markdown.",
+    "No hay botones de editar ni borrar por ítem en la Vista; el hover sobre el body no muestra acciones inline.",
+    "El ctx-header incluye un botón de icono (lápiz / Pencil de Lucide) junto al botón de descarga .md; al pulsarlo se entra en modo de edición de documento.",
+    "En modo edición, el body del panel muestra un <textarea class='vista-edit-doc'> con el Markdown fuente (buildMd(ctx)) a ancho/alto completo (flex: 1).",
+    "El <textarea> se auto-enfoca al entrar en modo edición.",
+    "El <textarea> auto-guarda con debounce de 400 ms en cada evento 'input' usando Store.replaceContextFromMarkdown; también guarda inmediatamente en 'blur'.",
+    "Cada guardado invalida el buffer Monaco del contexto (editor.invalidate(ctxId)) y llama a un callback onSync para refrescar el contador del rail.",
+    "Un botón 'Listo' aparece en el ctx-header (reemplaza al lápiz) mientras se está en modo edición; pulsarlo guarda inmediatamente y regresa al preview renderizado.",
+    "La tecla Escape en el textarea guarda y regresa al preview (mismo comportamiento que 'Listo').",
+    "El contexto vacío (sin ítems) sigue mostrando el estado vacío con icono NotebookPen y texto 'Contexto vacío'.",
+    "El toggle Vista/Editor del segmented control sigue funcionando; cambiar a 'Editor' desde modo edición-de-documento guarda antes de hacer flush al Monaco.",
+    "La descarga .md y el rename por doble-clic en el nombre del contexto siguen funcionando sin cambios.",
+    "El tab 'Editor' (Monaco) se mantiene idéntico.",
+    "chrome.storage.onChanged no re-renderiza el panel mientras mode === 'vista-edit' (evitar sobrescribir la edición en curso).",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_notes": {
+    "files_changed": [
+      "vite-extension/src/sidebar/vista.js",
+      "vite-extension/src/sidebar.js",
+      "vite-extension/src/sidebar.css"
+    ],
+    "files_unchanged": [
+      "vite-extension/src/storage.js",
+      "vite-extension/src/sidebar/editor.js",
+      "vite-extension/src/sidebar/store.js",
+      "vite-extension/src/sidebar/markdown.js",
+      "vite-extension/src/sidebar/rail.js",
+      "vite-extension/src/sidebar/theme.js",
+      "vite-extension/src/content.js",
+      "vite-extension/src/background.js",
+      "vite-extension/manifest.json"
+    ],
+    "new_mode_value": "vista-edit",
+    "sidebar_js_modes": ["vista", "vista-edit", "editor"],
+    "vista_js_exports": ["renderVista", "enterEditMode"],
+    "css_additions": [".vista-md-preview", ".vista-edit-doc"],
+    "css_removals": [".vista-list", ".vista-item", ".vista-item-text", ".vista-item-subtitle", ".vista-item-content", ".vista-actions", ".vista-btn-edit", ".vista-btn-delete", ".vista-edit-ta", ".vista-item.editing"],
+    "storage_contract": "Store.replaceContextFromMarkdown (same as Monaco sync) + Store.buildMd for serialization"
+  },
+  "dependencies": [10, 17],
+  "research_path": "docs/research_preview_doc_editor.md"
+}

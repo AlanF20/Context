@@ -113,6 +113,7 @@ body {
   place-items: center;
   font-size: 14px;
 }
+.icon-btn svg { width: fit-content; display: block; }
 .icon-btn:hover { background: var(--surface-3); color: var(--fg); }
 
 /* ===== Layout: rail + main ===== */
@@ -229,7 +230,18 @@ body {
 .btn:hover { filter: brightness(0.95); }
 .btn.ghost { background: transparent; color: var(--accent); }
 .btn.ghost:hover { background: var(--accent-soft); filter: none; }
-.btn.md { font-family: var(--mono); }
+.btn.md {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+.btn.md .md-mark {
+  height: auto;
+  display: block;
+  flex-shrink: 0;
+}
 
 .ctx-meta-row {
   display: flex;
@@ -281,7 +293,7 @@ body {
 #body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
 /* ===== Vista — rendered Markdown preview ===== */
-.md { flex: 1 1 auto; overflow-y: auto; padding: 14px 16px; font-size: 13px; }
+.md { overflow-y: auto; padding: 14px 16px; font-size: 13px; }
 .md h1 { font-size: 19px; font-weight: 800; margin: 0 0 10px; }
 .md h2 {
   font-size: 15px;
@@ -374,137 +386,36 @@ body {
   padding: 3px 12px;
 }
 
-/* ===== Vista item list (category badges + inline actions) ===== */
-
-.vista-list {
+/* ===== Vista — rich Markdown preview ===== */
+.vista-md-preview {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 12px 14px;
-  list-style: none;
-  margin: 0;
+  padding: 14px 16px;
 }
 
-.vista-item {
-  position: relative;
-  padding: 6px 8px;
-  border-radius: 8px;
-  transition: background 0.1s;
-  margin-bottom: 2px;
+/* ===== Vista — category item wrappers (left border by semantic type) ===== */
+.vista-md-preview .md-cat-item {
+  border-left: 3px solid var(--border-strong);
+  padding-left: 10px;
+  margin: 0 0 10px;
 }
-.vista-item:hover { background: var(--surface-2); }
+.vista-md-preview .md-cat-item.cat-idea     { border-left-color: var(--cat-idea-border); }
+.vista-md-preview .md-cat-item.cat-argument { border-left-color: var(--cat-arg-border); }
+.vista-md-preview .md-cat-item.cat-evidence { border-left-color: var(--cat-evidence-border); }
+.vista-md-preview .md-cat-item p { margin: 0; }
 
-/* Left-border accent per category — color reinforcement beyond badge (WCAG SC 1.4.1) */
-.vista-item-text[data-category="title"]    { border-left: 3px solid var(--cat-title-border);    padding-left: 10px; }
-.vista-item-text[data-category="idea"]     { border-left: 3px solid var(--cat-idea-border);     padding-left: 10px; }
-.vista-item-text[data-category="argument"] { border-left: 3px solid var(--cat-arg-border);      padding-left: 10px; }
-.vista-item-text[data-category="evidence"] { border-left: 3px solid var(--cat-evidence-border); padding-left: 10px; }
-
-/* subtitle: heading-style row */
-.vista-item-subtitle { margin-top: 12px; }
-.vista-item-subtitle:first-child { margin-top: 0; }
-.vista-item-subtitle .vista-item-content {
-  font-size: 14px;
-  font-weight: 700;
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--border);
-  color: var(--fg);
-  margin: 0;  /* reset <h3> browser default */
-}
-
-/* text item */
-.vista-item-text .vista-item-content {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--fg);
-  margin: 0 0 5px;  /* reset <p> browser default, keep bottom gap */
-}
-
-/* meta row: badge + source */
-.vista-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-/* Category badge chips */
-.vista-cat-badge {
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  padding: 2px 7px;
-  border-radius: 4px;
-  line-height: 1.6;
-  flex: 0 0 auto;
-}
-.badge-title    { background: #fde8ec; color: #8a1530; }
-.badge-idea     { background: #fff5d9; color: #7a4800; }
-.badge-argument { background: #ddeeff; color: #1a3d7a; }
-.badge-evidence { background: #d4f5e0; color: #175c2e; }
-
-:root[data-theme="dark"] .badge-title    { background: #3a1218; color: #f6b8c4; }
-:root[data-theme="dark"] .badge-idea     { background: #2d2008; color: #f5d78e; }
-:root[data-theme="dark"] .badge-argument { background: #0e1f3d; color: #93bef5; }
-:root[data-theme="dark"] .badge-evidence { background: #0c2b1a; color: #7fce9e; }
-
-/* Unique symbol per category (WCAG SC 1.4.1 — not color alone) */
-.badge-title::before    { content: "§ "; }
-.badge-idea::before     { content: "◈ "; }
-.badge-argument::before { content: "→ "; }
-.badge-evidence::before { content: "✓ "; }
-
-/* Hover actions */
-.vista-actions {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-.vista-item:hover .vista-actions,
-.vista-item:focus-within .vista-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-.vista-item.editing .vista-actions {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-.vista-btn-edit,
-.vista-btn-delete {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: 5px;
-  background: var(--surface-3);
-  color: var(--fg-2);
-  cursor: pointer;
-  font-size: 12px;
-  display: grid;
-  place-items: center;
-  line-height: 1;
-}
-.vista-btn-edit:hover   { background: var(--border); color: var(--fg); }
-.vista-btn-delete:hover { background: #fde8e8; color: #c0392b; }
-
-.vista-item.editing .vista-edit-ta {
+/* ===== Vista — inline full-document editor ===== */
+.vista-edit-doc {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  font: inherit;
-  font-size: 13px;
-  padding: 4px 6px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 14px 16px;
   background: var(--bg);
   color: var(--fg);
-  resize: vertical;
-  min-height: 2.4em;
-  outline: none;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
 }

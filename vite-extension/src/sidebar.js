@@ -10,11 +10,12 @@
  * Data flows through window.ContextStore (storage.js), re-exported by store.js.
  * ---------------------------------------------------------------------------
  */
+import { createElement, Sparkles, Download, Pencil } from "lucide";
 import { $ } from "./sidebar/dom.js";
 import { Store } from "./sidebar/store.js";
 import { initTheme } from "./sidebar/theme.js";
 import { renderRail } from "./sidebar/rail.js";
-import { renderVista } from "./sidebar/vista.js";
+import { renderVista, createDocEditor } from "./sidebar/vista.js";
 import { createEditorController } from "./sidebar/editor.js";
 
 const railList = $("#rail-list");
@@ -26,8 +27,9 @@ const themeToggle = $("#theme-toggle");
 // ---- State ----
 let contexts = [];
 let selectedId = null;
-let mode = "vista"; // "vista" (preview) | "editor" (Monaco)
+let mode = "vista"; // "vista" | "vista-edit" | "editor"
 const editor = createEditorController();
+const docEditor = createDocEditor();
 
 // =======================================================================
 //  Init
@@ -65,6 +67,7 @@ function selectedContext() {
 
 async function onSelectContext(id) {
   if (mode === "editor") await editor.flush();
+  if (mode === "vista-edit") await docEditor.flush();
   selectedId = id;
   mode = "vista";
   renderRail(railList, contexts, selectedId, onSelectContext, onDeleteContext);
@@ -73,7 +76,9 @@ async function onSelectContext(id) {
 
 async function onDeleteContext(id) {
   if (mode === "editor" && selectedId === id) await editor.flush();
+  if (mode === "vista-edit" && selectedId === id) await docEditor.flush();
   editor.invalidate(id);
+  docEditor.dispose();
   await Store.deleteContext(id);
   if (selectedId === id) selectedId = null;
   await render();
@@ -81,6 +86,7 @@ async function onDeleteContext(id) {
 
 async function onCreateContext() {
   if (mode === "editor") await editor.flush();
+  if (mode === "vista-edit") await docEditor.flush();
   const ctx = await Store.createContext("Nuevo contexto");
   selectedId = ctx.id;
   mode = "vista";
@@ -95,18 +101,37 @@ async function renderMain() {
   if (!ctx) {
     editor.dispose();
     ctxHeader.hidden = true;
-    bodyEl.innerHTML =
-      '<div class="state"><div class="glyph">✦</div>' +
-      '<div class="title">Sin contextos todavía</div>' +
-      '<div class="hint">Crea uno con “+” o resalta texto en una página.</div></div>';
+    const stateEl = document.createElement("div");
+    stateEl.className = "state";
+    const glyph = document.createElement("div");
+    glyph.className = "glyph";
+    const sparklesIcon = createElement(Sparkles, { width: 20, height: 20 });
+    sparklesIcon.style.pointerEvents = "none";
+    glyph.appendChild(sparklesIcon);
+    const stateTitle = document.createElement("div");
+    stateTitle.className = "title";
+    stateTitle.textContent = "Sin contextos todavía";
+    const stateHint = document.createElement("div");
+    stateHint.className = "hint";
+    stateHint.textContent = 'Crea uno con "+" o resalta texto en una página.';
+    stateEl.append(glyph, stateTitle, stateHint);
+    bodyEl.innerHTML = "";
+    bodyEl.appendChild(stateEl);
     return;
   }
   renderHeader(ctx);
   if (mode === "editor") {
-    await editor.mount(bodyEl, ctx, { onSync: afterEditorSync });
+    editor.mount(bodyEl, ctx, { onSync: afterEditorSync });
+  } else if (mode === "vista-edit") {
+    editor.dispose();
+    await docEditor.mount(bodyEl, ctx, {
+      onSync: afterDocEditorSync,
+      onEscape: () => switchMode("vista"),
+    });
   } else {
     editor.dispose();
-    renderVista(bodyEl, ctx, { onMutate: vistaOnMutate });
+    docEditor.dispose();
+    renderVista(bodyEl, ctx);
   }
 }
 
@@ -133,11 +158,33 @@ function renderHeader(ctx) {
   name.title = "Doble clic para renombrar";
   name.addEventListener("dblclick", () => startRename(ctx, name));
   const mdBtn = document.createElement("button");
-  mdBtn.className = "btn md";
-  mdBtn.textContent = ".md";
-  mdBtn.title = "Descargar Markdown";
+  mdBtn.className = "btn md ghost";
+  mdBtn.title = "Descargar como Markdown";
+  mdBtn.setAttribute("aria-label", "Descargar como Markdown");
+  const dlIcon = createElement(Download, { width: 13, height: 13 });
+  dlIcon.style.pointerEvents = "none";
+  mdBtn.append(makeMdMark(), dlIcon);
   mdBtn.addEventListener("click", () => downloadMd(ctx));
-  row1.append(dot, name, mdBtn);
+
+  if (mode === "vista") {
+    const editBtn = document.createElement("button");
+    editBtn.className = "icon-btn";
+    editBtn.title = "Editar documento";
+    editBtn.setAttribute("aria-label", "Editar documento");
+    const pencilIcon = createElement(Pencil, { width: 14, height: 14 });
+    pencilIcon.style.pointerEvents = "none";
+    editBtn.appendChild(pencilIcon);
+    editBtn.addEventListener("click", () => switchMode("vista-edit"));
+    row1.append(dot, name, mdBtn, editBtn);
+  } else if (mode === "vista-edit") {
+    const doneBtn = document.createElement("button");
+    doneBtn.className = "btn ghost";
+    doneBtn.textContent = "Listo";
+    doneBtn.addEventListener("click", () => switchMode("vista"));
+    row1.append(dot, name, mdBtn, doneBtn);
+  } else {
+    row1.append(dot, name, mdBtn);
+  }
 
   // Row 2: counter + Vista/Editor segmented toggle
   const row2 = document.createElement("div");
@@ -148,7 +195,7 @@ function renderHeader(ctx) {
   const seg = document.createElement("div");
   seg.className = "segmented";
   seg.append(
-    segBtn("Vista", mode === "vista", () => switchMode("vista")),
+    segBtn("Vista", mode === "vista" || mode === "vista-edit", () => switchMode("vista")),
     segBtn("Editor", mode === "editor", () => switchMode("editor"))
   );
   row2.append(counter, seg);
@@ -184,15 +231,27 @@ async function startRename(ctx, nameEl) {
   });
 }
 
-/** Called after any Vista edit/delete mutation — invalidates editor buffer and re-renders. */
-async function vistaOnMutate() {
+/** Called after each debounced save from the inline doc editor — refreshes rail + counter. */
+async function afterDocEditorSync() {
   editor.invalidate(selectedId);
-  await render();
+  contexts = await Store.listContexts();
+  const ctx = selectedContext();
+  if (!ctx) return;
+  renderRail(railList, contexts, selectedId, onSelectContext, onDeleteContext);
+  const counter = ctxHeader.querySelector(".counter");
+  if (counter) {
+    const c = countItems(ctx);
+    counter.textContent = `${c.total} ítems · ${c.sub} subt · ${c.txt} txt`;
+  }
 }
 
 async function switchMode(next) {
   if (next === mode) return;
   if (mode === "editor") await editor.flush();
+  if (mode === "vista-edit") {
+    await docEditor.flush();
+    contexts = await Store.listContexts(); // refresh after save
+  }
   mode = next;
   await renderMain();
 }
@@ -212,11 +271,43 @@ async function afterEditorSync() {
 }
 
 // =======================================================================
+//  Helpers
+// =======================================================================
+
+/** Canonical Markdown mark SVG badge (M with down-arrow in a rounded rect). */
+function makeMdMark() {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 208 128");
+  svg.setAttribute("width", "28");
+  svg.setAttribute("height", "28");
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("class", "md-mark");
+  svg.setAttribute("aria-hidden", "true");
+  const rect = document.createElementNS(NS, "rect");
+  rect.setAttribute("width", "198");
+  rect.setAttribute("height", "118");
+  rect.setAttribute("x", "5");
+  rect.setAttribute("y", "5");
+  rect.setAttribute("ry", "10");
+  rect.setAttribute("stroke", "currentColor");
+  rect.setAttribute("stroke-width", "10");
+  rect.setAttribute("fill", "none");
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("d", "M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0l-30-33h20V30h20v35h20z");
+  svg.append(rect, path);
+  return svg;
+}
+
+// =======================================================================
 //  Export
 // =======================================================================
 function downloadMd(ctx) {
-  // Prefer the live editor buffer when editing, else the stored document.
-  const md = (mode === "editor" && editor.peek(ctx.id)) || Store.buildMd(ctx);
+  // Prefer the live in-flight buffer when editing, else the stored document.
+  const liveDocMd = mode === "vista-edit"
+    ? document.querySelector(".vista-edit-doc")?.value
+    : null;
+  const md = liveDocMd || (mode === "editor" && editor.peek(ctx.id)) || Store.buildMd(ctx);
   const blob = new Blob([md], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement("a"), {

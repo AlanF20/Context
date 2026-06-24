@@ -15,9 +15,11 @@
 ---
 
 This repository builds **Context Highlighter**, a Chrome MV3 extension. The
-shipped code is the unpacked extension under **`outputs/`**. There is no `src/`,
-no `tests/` framework and no `specs/` JSON for now — verification is syntactic +
-logical, defined in `docs/verification.md`.
+active extension lives under **`vite-extension/`** (Vite + pnpm + @crxjs/vite-plugin).
+Source code is in `vite-extension/src/`; the built extension is in `vite-extension/dist/`.
+`outputs/` is **legacy/frozen** — do not edit it for new features.
+There is no tests framework — verification is `pnpm run build` + manual Chrome load,
+defined in `docs/verification.md`. Feature specs live in `specs/` as structured JSON files.
 
 ## 2. Repository map
 
@@ -33,9 +35,11 @@ logical, defined in `docs/verification.md`.
 | `docs/conventions.md`     | Code style, naming rules, file structure                 | Before writing code       |
 | `docs/verification.md`    | How to prove that the work actually works                | Before declaring done     |
 | `CHECKPOINTS.md`          | Objective criteria for "correct final state"             | For self-evaluation       |
-| `outputs/`                | **The extension** (manifest, storage.js, content.*, side panel, vendor/) | To implement |
-| `outputs/sidebar/`        | ES modules of the side panel (rail, vista, editor, …)    | To implement panel logic  |
-| `outputs/CLAUDE.md`       | Same project memory, colocated with the code             | While editing the code    |
+| `vite-extension/src/`     | **The extension source** (manifest, storage.js, content.*, side panel) | To implement |
+| `vite-extension/src/sidebar/` | ES modules of the side panel (rail, vista, editor, …) | To implement panel logic |
+| `vite-extension/dist/`    | Built extension — load this in Chrome                    | To test manually          |
+| `outputs/`                | **Legacy/frozen** — do not edit for new features         | Reference only            |
+| `specs/`                  | Feature specs as JSON (`NNN-spec-<name>.json`); validated by `init.sh` step 3 | Before implementing |
 
 ---
 
@@ -57,7 +61,7 @@ Each agent writes its output to disk and returns only a file reference to the Or
 
 - **One feature at a time.** Never mix changes from different features in the same session.
 - **Never declare done without passing verification.** Run `./init.sh` before closing; it must exit green and the checks in `docs/verification.md` must pass (no console errors in Chrome for UI changes).
-- **Code lives in `outputs/`** (the unpacked extension). Respect the modular conventions in `docs/conventions.md` and `CLAUDE.md` (HTML/CSS/JS separated, panel in ES modules, content script + storage.js classic, no remote code).
+- **Code lives in `vite-extension/src/`**. Respect the modular conventions in `docs/conventions.md` and `CLAUDE.md` (HTML/CSS/JS separated, panel in ES modules, npm deps are allowed and bundled locally by Vite, no remote code). Never edit `outputs/` for new features — it is frozen legacy.
 - **All output goes to disk.** Agents write files; the Orchestrator only receives references like `done -> progress/impl_<feature>.md`.
 - **Human must approve the spec before implementation starts.** The Spec-Writer handles this gate — the Orchestrator waits.
 - **If you don't know something, look in `docs/` or `CLAUDE.md`** before making it up.

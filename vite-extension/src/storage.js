@@ -186,6 +186,8 @@ export async function listSubtitles(contextId) {
  * @param {"subtitle"|"text"} opts.type
  * @param {string|null} [opts.linkedSubtitleId]
  * @param {string} [opts.sourceUrl]
+ * @param {string|null} [opts.rangePrefix]  — up to 50 chars before the selection (TextQuoteSelector)
+ * @param {string|null} [opts.rangeSuffix]  — up to 50 chars after the selection (TextQuoteSelector)
  * @returns {Promise<object>} the saved item
  */
 export async function addItem(contextId, opts) {
@@ -211,6 +213,8 @@ export async function addItem(contextId, opts) {
     source: opts.source || hostnameFromUrl(sourceUrl),
     sourceUrl,
     createdAt: Date.now(),
+    rangePrefix: opts.rangePrefix != null ? String(opts.rangePrefix).slice(0, 50) : null,
+    rangeSuffix: opts.rangeSuffix != null ? String(opts.rangeSuffix).slice(0, 50) : null,
   };
 
   // NOTE: duplicates are allowed by design — we never dedupe here.
@@ -413,8 +417,10 @@ export function buildMd(ctx) {
     } else {
       const meta = CATEGORIES[it.category];
       const prefix = meta && meta.emoji ? meta.emoji + " " : "";
-      lines.push(prefix + it.text, "");
-      if (it.source) lines.push("_Fuente: " + it.source + "_", "");
+      // Multi-line items (captured Markdown lists): omit the emoji prefix so
+      // list markers (- / 1.) remain at the start of each line and are parsed
+      // correctly by Markdown renderers. Category is preserved in storage.
+      lines.push(it.text.includes("\n") ? it.text : prefix + it.text, "");
     }
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
@@ -434,29 +440,58 @@ export const exportContextToMarkdown = buildMd;
 export function parseMd(md) {
   let name = null;
   const items = [];
+  let inBlockquote = false;
 
   for (const raw of String(md || "").split("\n")) {
     const line = raw.trim();
-    if (!line) continue;
+    if (!line) {
+      inBlockquote = false;
+      continue;
+    }
 
     const fuente = line.match(/^_Fuente:\s*(.+?)_$/i);
     if (/^#\s+/.test(line)) {
+      inBlockquote = false;
       name = line.replace(/^#\s+/, "").trim();
     } else if (/^#{2,6}\s+/.test(line)) {
+      inBlockquote = false;
       items.push({
         type: "subtitle",
         category: "title",
         text: line.replace(/^#{2,6}\s+/, "").trim(),
       });
     } else if (fuente) {
+      inBlockquote = false;
       for (let i = items.length - 1; i >= 0; i--) {
         if (items[i].type === "text") {
           items[i].source = fuente[1].trim();
           break;
         }
       }
+    } else if (/^>/.test(line)) {
+      // GFM blockquote line — part of a multi-line item (e.g. a captured list).
+      const bqText = line.replace(/^>\s*/, "");
+      if (!inBlockquote) {
+        // First line: extract category from emoji prefix.
+        let text = bqText;
+        let category = null;
+        for (const emoji of Object.keys(EMOJI_TO_CAT)) {
+          if (text.startsWith(emoji)) {
+            category = EMOJI_TO_CAT[emoji];
+            text = text.slice(emoji.length).trim();
+            break;
+          }
+        }
+        items.push({ type: "text", category, text });
+        inBlockquote = true;
+      } else {
+        // Continuation: append to the last text item.
+        const last = items[items.length - 1];
+        if (last && last.type === "text") last.text += "\n" + bqText;
+      }
     } else {
-      let text = line.replace(/^>\s+/, "").trim();
+      inBlockquote = false;
+      let text = line;
       let category = null;
       for (const emoji of Object.keys(EMOJI_TO_CAT)) {
         if (text.startsWith(emoji)) {

@@ -1,0 +1,54 @@
+{
+  "id": 19,
+  "status": "implemented",
+  "createdAt": "2026-06-24T00:00:00Z",
+  "author": "harness/spec-writer",
+  "title": "Preservar estructura de listas al capturar resaltados",
+  "description": "window.getSelection().toString() descarta toda estructura HTML al capturar, por lo que seleccionar elementos <ul>/<ol>/<li> guarda texto plano sin viñetas ni numeración. La fix extrae el fragmento DOM del Range guardado (savedRange.cloneContents()), lo convierte a Markdown mediante un helper fragmentToMarkdown() y reemplaza el texto plano como savedText. Esto fluye sin cambios por Store.addItem → buildMd → marked → Vista. Acompañan una corrección de CSS (white-space: pre-wrap en el popup) y una corrección de parseMd para que listas multilínea hagan round-trip correcto a través del editor de documento.",
+  "acceptance_criteria": [
+    "Al resaltar una lista <ul>, el texto guardado en storage preserva las viñetas: cada <li> se convierte en '- texto del ítem'.",
+    "Al resaltar una lista <ol>, el texto guardado preserva la numeración: cada <li> se convierte en '1. texto', '2. texto', etc.",
+    "Las listas anidadas se indentan con 2 espacios por nivel en el Markdown generado.",
+    "Si la selección no contiene ningún elemento de lista (<ul>/<ol>/<li>), el comportamiento es idéntico al actual (sel.toString().trim()).",
+    "El bloque .ch-quote-text en el popup de captura muestra los saltos de línea visibles (white-space: pre-wrap en content.css).",
+    "La Vista renderiza la lista capturada como <ul>/<ol> HTML (vía marked GFM) sin cambios adicionales en vista.js ni buildMd.",
+    "El round-trip es correcto: buildMd emite items multilínea como bloques blockquote GFM (> línea 1 / > línea 2); parseMd agrupa líneas consecutivas '>' en un solo item en lugar de crear un item por línea.",
+    "Items existentes de texto plano (sin '\\n') no se ven afectados por el cambio en parseMd.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_notes": {
+    "files_changed": [
+      "vite-extension/src/content.js",
+      "vite-extension/src/content.css",
+      "vite-extension/src/storage.js"
+    ],
+    "files_unchanged": [
+      "vite-extension/src/sidebar/vista.js",
+      "vite-extension/src/sidebar/markdown.js",
+      "vite-extension/src/sidebar/editor.js",
+      "vite-extension/src/sidebar.js",
+      "vite-extension/src/sidebar.css",
+      "vite-extension/manifest.json"
+    ],
+    "content_js_changes": {
+      "new_helper": "fragmentToMarkdown(fragment) — walk DocumentFragment, convert <ul>/<ol>/<li> to Markdown bullets/numbers, handle nesting with 2-space indent, fallback to textContent for unknown tags",
+      "mouseup_handler": "After savedRange is set (line 36), compute savedText = fragmentToMarkdown(sel.getRangeAt(0).cloneContents()) instead of sel.toString().trim(). Fall back to sel.toString().trim() if cloneContents() throws or returns no list elements."
+    },
+    "content_css_changes": {
+      "add": ".ch-quote-text { white-space: pre-wrap; }"
+    },
+    "storage_js_changes": {
+      "buildMd": "When it.text contains '\\n', emit each line prefixed with '> ' (GFM blockquote) instead of plain text, so parseMd can unambiguously group them.",
+      "parseMd": "Accumulate consecutive lines that start with '>' into a single item buffer; flush the buffer as one item when a non-'>' line is encountered."
+    },
+    "edge_cases": [
+      "Partial list selection (only some <li>): cloneContents returns the selected nodes; fragmentToMarkdown treats any <li> as a bullet.",
+      "Mixed content (text + list): outer loop processes <p> then <ul> sequentially.",
+      "Definition lists <dl>/<dt>/<dd>: <dt> → '**term**', <dd> → '  definition' (indented text).",
+      "Tables <table>: out of scope; fall back to node.textContent."
+    ]
+  },
+  "dependencies": [],
+  "research_path": "docs/research_list_structure_capture.md"
+}

@@ -1,6 +1,7 @@
 /**
  * rail.js — the vertical rail of context chips.
  */
+import { createElement, X } from "lucide";
 
 /** Two-letter initials for a context name ("Cortisol" -> "Co"). */
 function initials(name) {
@@ -38,7 +39,9 @@ export function renderRail(listEl, contexts, selectedId, onSelect, onDelete) {
     const delBtn = document.createElement("button");
     delBtn.className = "rail-chip-del";
     delBtn.title = "Eliminar contexto";
-    delBtn.textContent = "✕";
+    const xIcon = createElement(X, { width: 10, height: 10 });
+    xIcon.style.pointerEvents = "none";
+    delBtn.appendChild(xIcon);
     delBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       onDelete(ctx.id);

@@ -122,7 +122,7 @@ export function createEditorController() {
       };
       const req = window.require;
       if (!req) return reject(new Error("Monaco loader.js not found"));
-      req.config({ paths: { vs: "vendor/monaco/vs" } });
+      req.config({ paths: { vs: chrome.runtime.getURL("vendor/monaco/vs") } });
       req(
         ["vs/editor/editor.main"],
         () => {

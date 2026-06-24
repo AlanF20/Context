@@ -1,0 +1,42 @@
+{
+  "id": 13,
+  "status": "implemented",
+  "createdAt": "2026-06-23",
+  "author": "Spec-Writer (harness)",
+  "title": "Adopción de Lucide Icons en vite-extension/",
+  "description": "Reemplazar los caracteres Unicode (✏ ✕ ◐ ☾ ✦ ✎) usados como iconos en el panel lateral por SVGs de Lucide Icons. Se instala el paquete npm 'lucide' en vite-extension/ y se importan solo los iconos necesarios (tree-shaking via Vite). Los badges de categoría CSS (§ ◈ → ✓) no se tocan. outputs/ no se modifica (legacy congelado).",
+  "acceptance_criteria": [
+    "lucide aparece como dependencia de producción en vite-extension/package.json.",
+    "src/sidebar/vista.js importa Pencil y X de lucide y los usa en los botones editar/borrar (no '✏'/'✕').",
+    "src/sidebar/rail.js importa X de lucide y lo usa en el botón borrar del chip (no '✕').",
+    "src/sidebar/theme.js importa Sun y Moon de lucide y los usa en el toggle (no '◐'/'☾').",
+    "src/sidebar.js importa Sparkles (u otro icono apropiado) de lucide y lo usa en el glyph de estado vacío (no '✦').",
+    "src/sidebar/vista.js usa un icono apropiado de lucide para el glyph del estado vacío del contexto (no '✎').",
+    ".icon-btn en src/sidebar.css tiene regla 'svg { width: 16px; height: 16px; display: block; pointer-events: none; }' para que los SVGs hereden tamaño correcto.",
+    "Los botones de vista (.vista-btn-edit, .vista-btn-delete) en src/sidebar.css tienen la misma regla SVG.",
+    "Los badges de categoría CSS (::before con §, ◈, →, ✓) permanecen sin cambios.",
+    "content.js no se modifica.",
+    "pnpm run build en vite-extension/ termina sin errores y genera dist/ con los iconos Lucide incluidos."
+  ],
+  "dependencies": [10],
+  "implementation_notes": {
+    "lucide_version": "latest estable al momento de implementar; pinear versión exacta en package.json",
+    "icon_map": {
+      "edit_button":    "Pencil",
+      "delete_button":  "X",
+      "theme_light":    "Sun",
+      "theme_dark":     "Moon",
+      "empty_no_contexts": "Sparkles",
+      "empty_context":  "NotebookPen"
+    },
+    "svg_size": "16×16 para botones de acción; 20×20 para glyphs de estado vacío",
+    "helper_pattern": "crear función iconEl(LucideIcon, size) que devuelve SVGElement usando lucide.createElement, reutilizable en todos los módulos",
+    "do_not_change": [
+      "content.js (IIFE clásico, sin iconos)",
+      "storage.js (capa de datos pura)",
+      "manifest.json",
+      "CSS ::before de badges de categoría",
+      "outputs/ (legacy congelado)"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": 6,
+  "status": "implemented",
+  "createdAt": "2026-06-22",
+  "author": "human",
+  "title": "Jerarquía semántica y accesibilidad en la Vista (WCAG)",
+  "description": "Dar más importancia semántica a cada texto del panel lateral siguiendo criterios WCAG 2.1. Subtítulos como <h3>, notas de texto como <p> dentro de <li>/<ul>, ícono único por categoría (no solo color, SC 1.4.1), borde izquierdo tintado por categoría para refuerzo visual, mejor espaciado tipográfico. Eliminar el URL/dominio fuente que aparece debajo de cada nota.",
+  "acceptance_criteria": [
+    "Los subtítulos se renderizan como <h3> (no <div>) dentro de <li>.",
+    "Las notas de texto se renderizan como <p> (no <div>) dentro de <li> dentro de <ul role='list'>.",
+    "Cada badge de categoría muestra un símbolo único además del color (§ Título, ◈ Idea, → Argumento, ✓ Evidencia), satisfaciendo WCAG SC 1.4.1.",
+    "Cada ítem de texto tiene un borde izquierdo de 3 px tintado con el color semántico de su categoría.",
+    "El dominio/URL fuente ya NO aparece en la fila de metadatos de ninguna nota.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "dependencies": [5]
+}

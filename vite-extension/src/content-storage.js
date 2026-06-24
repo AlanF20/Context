@@ -186,6 +186,8 @@ export async function listSubtitles(contextId) {
  * @param {"subtitle"|"text"} opts.type
  * @param {string|null} [opts.linkedSubtitleId]
  * @param {string} [opts.sourceUrl]
+ * @param {string|null} [opts.rangePrefix]  — up to 50 chars before the selection (TextQuoteSelector)
+ * @param {string|null} [opts.rangeSuffix]  — up to 50 chars after the selection (TextQuoteSelector)
  * @returns {Promise<object>} the saved item
  */
 export async function addItem(contextId, opts) {
@@ -211,6 +213,8 @@ export async function addItem(contextId, opts) {
     source: opts.source || hostnameFromUrl(sourceUrl),
     sourceUrl,
     createdAt: Date.now(),
+    rangePrefix: opts.rangePrefix != null ? String(opts.rangePrefix).slice(0, 50) : null,
+    rangeSuffix: opts.rangeSuffix != null ? String(opts.rangeSuffix).slice(0, 50) : null,
   };
 
   // NOTE: duplicates are allowed by design — we never dedupe here.

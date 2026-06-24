@@ -1,0 +1,15 @@
+{
+  "id": 1,
+  "status": "implemented",
+  "createdAt": "2026-06-22",
+  "author": "human",
+  "title": "Editar/borrar por ítem en la Vista",
+  "description": "Añadir acciones de editar y borrar por ítem en la Vista (tab de preview). Hoy la Vista es un bloque HTML generado por buildMd → marked → HTML estático. Después de este cambio, cada ítem es editable y borrable inline sin salir de la Vista.",
+  "acceptance_criteria": [
+    "Al pasar el cursor sobre una nota aparecen acciones editar/borrar.",
+    "Editar convierte la nota en input/textarea inline; Enter/blur confirma, Esc cancela.",
+    "Borrar elimina la nota de inmediato y persiste en chrome.storage.local.",
+    "Cualquier cambio invalida el buffer del editor del contexto (editor.invalidate)."
+  ],
+  "dependencies": []
+}

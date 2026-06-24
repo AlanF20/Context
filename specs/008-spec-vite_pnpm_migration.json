@@ -1,0 +1,19 @@
+{
+  "id": 8,
+  "status": "implemented",
+  "createdAt": "2026-06-22",
+  "author": "human",
+  "title": "Migración a Vite + pnpm + @crxjs/vite-plugin",
+  "description": "Crear un nuevo proyecto Vite con @crxjs/vite-plugin y pnpm como gestor de paquetes. Adaptar la extensión MV3 actual (content script, storage, popup/side-panel) a la arquitectura ESM nativa de Vite, con HMR automático para desarrollo. El resultado es un nuevo directorio de proyecto (raíz o subdir separado) que reemplaza el flujo manual de outputs/.",
+  "acceptance_criteria": [
+    "pnpm install y pnpm run dev arrancan sin errores.",
+    "pnpm run build genera un dist/ listo para cargar en Chrome.",
+    "content.js se inyecta como content script con HMR en dev.",
+    "storage.js es un módulo ES importable tanto desde content.js como desde el popup/panel.",
+    "popup.html o sidebar.html cargan como módulos ES vía CRXJS.",
+    "manifest.json está bajo control de Vite/CRXJS (no editado a mano post-build).",
+    "No hay CDNs ni código remoto (MV3 CSP).",
+    "node --check pasa en todos los archivos JS del proyecto."
+  ],
+  "dependencies": []
+}

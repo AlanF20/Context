@@ -1,0 +1,17 @@
+{
+  "id": 7,
+  "status": "implemented",
+  "createdAt": "2026-06-22",
+  "author": "human",
+  "title": "Select de subtítulo en el popup de captura",
+  "description": "Reemplazar el checkbox 'Anidar bajo [último subtítulo]' por un <select> que lista todos los subtítulos del contexto seleccionado, permitiendo elegir bajo cuál anidar (o ninguno).",
+  "acceptance_criteria": [
+    "La fila de anidación muestra un <select> con 'Sin subtítulo' como primera opción + una opción por cada subtítulo del contexto.",
+    "La fila se oculta cuando la categoría es 'Título' (type === subtitle) o cuando el contexto seleccionado no tiene subtítulos.",
+    "Al guardar, el linkedSubtitleId toma el valor del option seleccionado (null si 'Sin subtítulo').",
+    "El select se repuebla al cambiar de contexto o de categoría.",
+    "El select tiene el estilo consistente con el resto del popup (tokens ch-).",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "dependencies": []
+}

@@ -21,7 +21,7 @@
         "Borrar elimina la nota de inmediato y persiste en chrome.storage.local.",
         "Cualquier cambio invalida el buffer del editor del contexto (editor.invalidate)."
       ],
-      "spec_path": "docs/spec_vista_item_actions.md",
+      "spec_path": "specs/001-spec-vista_item_actions.json",
       "dependencies": [],
       "status": "done"
     },
@@ -63,9 +63,9 @@
         "Existe una forma de quitar un resaltado de la página.",
         "El re-aplicado degrada con seguridad si el DOM cambió (no rompe la página)."
       ],
-      "spec_path": null,
+      "spec_path": "specs/004-spec-page_highlight_persistence.json",
       "dependencies": [],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": 5,
@@ -80,7 +80,7 @@
         "Los badges tienen overrides correctos en dark mode.",
         "init.sh pasa sin errores de sintaxis."
       ],
-      "spec_path": "docs/spec_category_indicators.md",
+      "spec_path": "specs/005-spec-category_indicators.json",
       "dependencies": [1],
       "status": "done"
     },
@@ -97,7 +97,7 @@
         "El dominio/URL fuente ya NO aparece en la fila de metadatos de ninguna nota.",
         "init.sh pasa sin errores de sintaxis."
       ],
-      "spec_path": "docs/spec_semantic_hierarchy.md",
+      "spec_path": "specs/006-spec-semantic_hierarchy.json",
       "dependencies": [5],
       "status": "done"
     },
@@ -114,7 +114,7 @@
         "El select tiene el estilo consistente con el resto del popup (tokens ch-).",
         "init.sh pasa sin errores de sintaxis."
       ],
-      "spec_path": "docs/spec_subtitle_nest_select.md",
+      "spec_path": "specs/007-spec-subtitle_nest_select.json",
       "dependencies": [],
       "status": "done"
     },
@@ -150,7 +150,7 @@
         "No hay CDNs ni código remoto (MV3 CSP).",
         "node --check pasa en todos los archivos JS del proyecto."
       ],
-      "spec_path": "docs/spec_vite_pnpm_migration.md",
+      "spec_path": "specs/008-spec-vite_pnpm_migration.json",
       "dependencies": [],
       "status": "done"
     },
@@ -169,8 +169,179 @@
         "El contenido del rail (chips de contexto) y el toggle Vista/Editor funcionan a paridad con outputs/.",
         "init.sh pasa sin errores de sintaxis."
       ],
-      "spec_path": "docs/spec_vite_sidebar_parity.md",
+      "spec_path": "specs/010-spec-vite_sidebar_parity.json",
       "dependencies": [8],
+      "status": "done"
+    },
+    {
+      "id": 12,
+      "name": "sidebar_header_dedup",
+      "title": "Eliminar cabecera duplicada del panel lateral",
+      "description": "El panel lateral muestra dos cabeceras: la nativa de Chrome (con el nombre de la extensión) y un .chrome-bar propio (logo + título + toggle de tema). Son redundantes. Eliminar .chrome-bar, mover el toggle de tema al final del rail.",
+      "acceptance_criteria": [
+        "El sidebar.html ya no tiene el div .chrome-bar (logo + título).",
+        "El botón #theme-toggle vive dentro del .rail, al final de la columna (empujado con margin-top: auto).",
+        "La única cabecera visible es la nativa del panel de Chrome.",
+        "El toggle de tema sigue funcionando (claro/oscuro persiste en localStorage).",
+        "Los estilos .chrome-bar, .logo y .chrome-bar .title se eliminan de sidebar.css (.icon-btn se conserva).",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/012-spec-sidebar_header_dedup.json",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 14,
+      "name": "capture_quote_preview",
+      "title": "Preview dinámico del texto seleccionado en el popup de captura",
+      "description": "Mejorar el bloque .ch-quote del popup de captura para que refleje visualmente la categoría activa (border-color dinámico), truncar selecciones largas con indicador de caracteres y toggle para expandir, y mostrar la etiqueta de categoría en el propio quote para que el usuario sepa exactamente cómo quedará guardada la nota.",
+      "acceptance_criteria": [
+        "El borde izquierdo del .ch-quote cambia al color de la categoría seleccionada en tiempo real (no siempre --accent).",
+        "Selecciones largas (>150 caracteres) se truncan a ~120 chars con '…' y un badge '[N caracteres]'; un toggle 'ver todo / colapsar' expande/colapsa el texto completo.",
+        "Un chip de categoría pequeño (mismo estilo que los badges de la Vista) aparece dentro del bloque .ch-quote, mostrando el nombre de la categoría activa.",
+        "El chip de categoría se actualiza inmediatamente al cambiar de categoría.",
+        "No se altera el texto que se guarda en storage (solo visual).",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/014-spec-capture_quote_preview.json",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 11,
+      "name": "spec_folder_refactor",
+      "title": "Mover specs a specs/ con nomenclatura 001-spec-<desc>.json",
+      "description": "El harness almacena las specs como archivos Markdown en docs/spec_*.md. Migrar a una carpeta dedicada specs/ con formato JSON estructurado y nomenclatura 001-spec-<descripcion>.json donde 001 es el id del feature con cero-padding. Actualizar init.sh (ya valida specs/*.json), CLAUDE.md, AGENTS.md y feature_list.json para reflejar el nuevo contrato.",
+      "acceptance_criteria": [
+        "Existe un directorio specs/ en la raíz del repo.",
+        "Cada feature con spec_path tiene un archivo specs/NNN-spec-<name>.json válido (campos id, status, createdAt, author, title, description, acceptance_criteria, dependencies).",
+        "feature_list.json apunta a los nuevos paths en specs/ para todos los features que tenían spec_path.",
+        "init.sh pasa sin errores: el step 3 valida y reporta [OK] para cada archivo en specs/.",
+        "CLAUDE.md y AGENTS.md documentan la nueva convención.",
+        "Los archivos docs/spec_*.md pueden mantenerse como referencia histórica pero spec_path ya no los referencia."
+      ],
+      "spec_path": "specs/011-spec-spec_folder_refactor.json",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 15,
+      "name": "nest_selector_redesign",
+      "title": "Rediseño del selector 'Anidar bajo' en el popup de captura",
+      "description": "Cambiar el layout del bloque .ch-nest de horizontal (label + select en fila) a columna (label encima, select debajo), mejorando legibilidad y consistencia visual con el resto del popup.",
+      "acceptance_criteria": [
+        "El bloque .ch-nest muestra la label 'Anidar bajo' en la primera línea y el <select> debajo en la siguiente.",
+        "El <select> ocupa el ancho completo del contenedor.",
+        "El diseño es consistente con los tokens ch- y el resto del popup.",
+        "No se altera la lógica JS ni el contrato de datos (linkedSubtitleId).",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/015-spec-nest_selector_redesign.json",
+      "dependencies": [7],
+      "status": "done"
+    },
+    {
+      "id": 17,
+      "name": "monaco_amd_path_fix",
+      "title": "Fix carga de Monaco en Vite (ruta AMD relativa)",
+      "description": "En la build de Vite, sidebar.html se sirve desde chrome-extension://<id>/src/sidebar.html, pero editor.js configura req.config con la ruta relativa 'vendor/monaco/vs'. El AMD loader la resuelve como /src/vendor/monaco/vs en lugar de /vendor/monaco/vs, por lo que Monaco falla al cargar. La fix es reemplazar la ruta relativa por chrome.runtime.getURL('vendor/monaco/vs').",
+      "acceptance_criteria": [
+        "El Editor muestra Monaco correctamente al activar la pestaña Editor en el panel lateral.",
+        "No aparece el mensaje 'No se pudo cargar el editor / Verifica la carpeta vendor/monaco'.",
+        "La ruta AMD usa chrome.runtime.getURL('vendor/monaco/vs') en lugar de una cadena relativa.",
+        "pnpm run build termina sin errores.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/017-spec-monaco_amd_path_fix.json",
+      "dependencies": [10],
+      "status": "done"
+    },
+    {
+      "id": 16,
+      "name": "vista_item_style_simplification",
+      "title": "Simplificar estilo de ítems en la Vista",
+      "description": "Rediseño visual de los ítems de texto en la Vista: eliminar el badge de categoría (el borde izquierdo de color ya comunica el tipo, el badge es redundante), eliminar el border-radius de los ítems (estilo más limpio sin tarjeta redondeada), mantener solo el borde lateral izquierdo de color, y añadir margin-top de 8px entre cada caja de texto.",
+      "acceptance_criteria": [
+        "Ningún ítem de texto muestra el badge de categoría (§ Título, ◈ Idea, → Argumento, ✓ Evidencia).",
+        "Los ítems de texto no tienen border-radius (cuadrados/flush).",
+        "El borde lateral izquierdo de color sigue presente por categoría.",
+        "Cada ítem de tipo text tiene margin-top: 8px (excepto el primero de la lista).",
+        "Los estilos .vista-cat-badge y .badge-* se eliminan de sidebar.css.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/016-spec-vista_item_style_simplification.json",
+      "dependencies": [6],
+      "status": "done"
+    },
+    {
+      "id": 18,
+      "name": "preview_doc_editor",
+      "title": "Rich Markdown preview + document-level inline edit en Vista",
+      "description": "Reemplazar el render ítem-por-ítem de la Vista (y su edición box-by-box) por: (1) un preview enriquecido que usa marked para renderizar buildMd(ctx) completo — headings, bold, italic, source links —, y (2) un modo de edición de documento completo donde el cuerpo se convierte en un <textarea> con el Markdown fuente, sin botones de edición por ítem. Los botones de borrar por ítem se eliminan también; la eliminación de ítems pasa a ser gestionada editando el Markdown o desde el Editor Monaco.",
+      "acceptance_criteria": [
+        "La Vista renderiza el resultado de marked(buildMd(ctx)) con DOMPurify; se ven headings ##, bold, italic, fuentes y emojis de categoría.",
+        "No hay botones de editar/borrar por ítem en la Vista.",
+        "Un botón 'Editar' (o doble-clic sobre el body) reemplaza el preview por un <textarea> con el Markdown fuente completo.",
+        "El textarea auto-guarda con debounce de 400 ms (Store.replaceContextFromMarkdown) y al blur.",
+        "Un botón 'Listo' (o Escape) regresa al preview renderizado.",
+        "El tab 'Editor' (Monaco) sigue disponible e inalterado.",
+        "El toggle Vista/Editor del header sigue funcionando.",
+        "La descarga .md y el rename siguen funcionando.",
+        "pnpm run build termina sin errores.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/018-spec-preview_doc_editor.json",
+      "dependencies": [10, 17],
+      "status": "done"
+    },
+    {
+      "id": 20,
+      "name": "markdown_preview_category_borders",
+      "title": "Bordes de categoría en el preview Markdown de la Vista",
+      "description": "El preview Markdown actual (feature #18) renderiza los ítems capturados como párrafos `<p>` planos con el emoji de categoría al inicio (🟡/🔵/🟢). La feature añade un renderer personalizado de marked que detecta el emoji, lo elimina del texto visible y envuelve cada párrafo de texto en un `<div class='md-cat-item cat-{category}'>` con el borde izquierdo de color correspondiente a su categoría (usando los tokens CSS `--cat-*-border` ya definidos), igual al estilo que tenían los ítems en la vista ítem-por-ítem anterior.",
+      "acceptance_criteria": [
+        "Los párrafos de texto con prefijo 🟡/🔵/🟢 se renderizan envueltos en un <div class='md-cat-item cat-{idea|argument|evidence}'> con border-left de 3px tintado con el color semántico de su categoría.",
+        "El emoji de categoría (🟡/🔵/🟢) ya NO aparece en el texto visible del preview — el borde de color comunica la categoría.",
+        "Los subtítulos (## headings) siguen renderizándose como <h2> sin cambios.",
+        "La línea _Fuente: dominio_ sigue apareciendo correctamente (sin cambios en su render o posición).",
+        "Los ítems sin categoría (category: null) se renderizan como <p> normal sin wrapper de categoría.",
+        "El override del renderer aplica solo al preview de la Vista; el Editor Monaco (buildMd) y el export .md no cambian.",
+        "Los bordes tienen los colores correctos en modo claro y oscuro (usan los tokens --cat-*-border ya definidos).",
+        "pnpm run build termina sin errores.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": null,
+      "dependencies": [18],
+      "status": "done"
+    },
+    {
+      "id": 19,
+      "name": "list_structure_capture",
+      "title": "Preservar estructura de listas al capturar resaltados",
+      "description": "Al resaltar elementos de lista (<ul>/<ol>/<li>), window.getSelection().toString() descarta la estructura (viñetas, numeración) y solo guarda texto plano. La feature detecta selecciones que contienen elementos de lista y convierte la estructura HTML a Markdown (- ítem / 1. ítem) antes de guardar en storage.",
+      "acceptance_criteria": [
+        "Al resaltar una lista <ul>, el texto guardado preserva los bullets como '- ítem'.",
+        "Al resaltar una lista <ol>, el texto guardado preserva la numeración como '1. ítem'.",
+        "Las listas anidadas se indentan con 2 espacios por nivel.",
+        "El texto del preview en el popup refleja el formato con bullets.",
+        "Si la selección no contiene estructura de lista, el comportamiento es idéntico al actual.",
+        "buildMd/parseMd no requieren cambios (el texto guardado ya es Markdown válido).",
+        "pnpm run build termina sin errores.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/019-spec-list_structure_capture.json",
+      "dependencies": [],
+      "status": "done"
+    }
+  ],
+  "evaluations": [
+    {
+      "id": 13,
+      "name": "lucide_icons_adoption",
+      "title": "Adopción de Lucide Icons",
+      "description": "Evaluar si conviene reemplazar los caracteres Unicode (✏ ✕ ◐ ☾ ✦) usados como iconos en el panel lateral por SVGs de la librería Lucide. Incluye análisis de compatibilidad MV3, estrategia de vendoring para outputs/ y de integración npm para vite-extension/, e impacto en bundle, accesibilidad y consistencia visual cross-platform.",
+      "spec_path": "specs/013-spec-lucide_icons_adoption.json",
+      "dependencies": [],
       "status": "done"
     }
   ]

@@ -25,6 +25,90 @@ let savedRange = null;
 let iconEl = null;
 let popEl = null;
 
+// ----- list → Markdown conversion -----
+
+/**
+ * Convert a DocumentFragment from Range.cloneContents() to Markdown.
+ * Returns null when the fragment contains no list elements so the caller
+ * can fall back to sel.toString().trim().
+ */
+function fragmentToMarkdown(fragment) {
+  if (!fragment.querySelector("ul, ol, li")) return null;
+  const md = _childrenToMd(fragment, 0);
+  return md.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function _nodeToMd(node, indent) {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const tag = node.tagName.toLowerCase();
+  switch (tag) {
+    case "ul": return _listToMd(node, indent, false);
+    case "ol": return _listToMd(node, indent, true);
+    case "li": return _liToMd(node, indent, false, 1); // standalone li (partial selection)
+    case "br": return "\n";
+    case "p":
+    case "div":
+    case "section":
+    case "article": {
+      const inner = _childrenToMd(node, indent).trim();
+      return inner ? inner + "\n\n" : "";
+    }
+    case "h1": return "# " + node.textContent.trim() + "\n\n";
+    case "h2": return "## " + node.textContent.trim() + "\n\n";
+    case "h3":
+    case "h4":
+    case "h5":
+    case "h6": return "### " + node.textContent.trim() + "\n\n";
+    case "strong":
+    case "b": return "**" + _childrenToMd(node, indent) + "**";
+    case "em":
+    case "i": return "_" + _childrenToMd(node, indent) + "_";
+    case "code": return "`" + node.textContent + "`";
+    case "dt": return "**" + node.textContent.trim() + "**\n";
+    case "dd": return "  " + node.textContent.trim() + "\n";
+    case "table": return node.textContent.trim() + "\n\n"; // fallback: no table Markdown
+    default: return _childrenToMd(node, indent);
+  }
+}
+
+function _listToMd(listNode, indent, ordered) {
+  const parts = [];
+  let n = 1;
+  for (const child of listNode.childNodes) {
+    if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === "li") {
+      parts.push(_liToMd(child, indent, ordered, n));
+      if (ordered) n++;
+    }
+  }
+  return parts.join("\n") + "\n";
+}
+
+function _liToMd(li, indent, ordered, n) {
+  const pad = "  ".repeat(indent);
+  const bullet = ordered ? n + ". " : "- ";
+  let inlineText = "";
+  const nested = [];
+  for (const child of li.childNodes) {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const t = child.tagName.toLowerCase();
+      if (t === "ul" || t === "ol") {
+        nested.push(_listToMd(child, indent + 1, t === "ol"));
+        continue;
+      }
+    }
+    inlineText += _nodeToMd(child, indent);
+  }
+  const firstLine = pad + bullet + inlineText.trim();
+  return nested.length ? firstLine + "\n" + nested.join("") : firstLine;
+}
+
+function _childrenToMd(node, indent) {
+  let out = "";
+  for (const child of node.childNodes) out += _nodeToMd(child, indent);
+  return out;
+}
+
 // ----- selection detection -----
 document.addEventListener("mouseup", (e) => {
   if (isOwnUi(e.target)) return;
@@ -32,8 +116,10 @@ document.addEventListener("mouseup", (e) => {
     const sel = window.getSelection();
     const text = sel ? sel.toString().trim() : "";
     if (text) {
-      savedText = text;
-      savedRange = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+      const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+      const mdText = range ? fragmentToMarkdown(range.cloneContents()) : null;
+      savedText = mdText !== null ? mdText : text;
+      savedRange = range ? range.cloneRange() : null;
       const rect = getRect(sel);
       if (rect) showIcon(rect);
     } else {
@@ -109,6 +195,9 @@ function removeIcon() {
   iconEl = null;
 }
 
+const TRUNCATE_AT = 150;
+const PREVIEW_LEN = 120;
+
 /**
  * Static markup for the capture popup. Kept as a single template here so the
  * structure lives in one place; openPopup() wires behaviour via data-role.
@@ -119,9 +208,18 @@ function popupSkeleton() {
       <span class="ch-pop-title">Guardar resaltado</span>
       <span class="ch-pop-ctx" data-role="ctx-tag"></span>
     </div>
-    <div class="ch-quote" data-role="quote"></div>
+    <div class="ch-quote" data-role="quote">
+      <div class="ch-quote-header">
+        <span class="ch-quote-chip" data-role="quote-chip"></span>
+        <span class="ch-quote-meta">
+          <span class="ch-quote-len" data-role="quote-len" hidden></span>
+          <button class="ch-quote-toggle" data-role="quote-toggle" type="button" hidden></button>
+        </span>
+      </div>
+      <div class="ch-quote-text" data-role="quote-text"></div>
+    </div>
 
-    <div class="ch-control-row">
+    <div class="ch-capture-row">
       <div class="ch-combo">
         <div class="ch-combo-pill">
           <span class="ch-combo-dot" data-role="dot"></span>
@@ -131,9 +229,16 @@ function popupSkeleton() {
         </div>
         <div class="ch-combo-menu" data-role="menu" hidden></div>
       </div>
+      <div class="ch-cat-pill">
+        <span class="ch-cat-dot" data-role="cat-dot"></span>
+        <select class="ch-cat-sel" data-role="cat-select">
+          <option value="title">Título</option>
+          <option value="idea">Idea</option>
+          <option value="argument">Argumento</option>
+          <option value="evidence">Evidencia</option>
+        </select>
+      </div>
     </div>
-
-    <div class="ch-cats" data-role="cats"></div>
 
     <div class="ch-nest" data-role="nest" hidden>
       <label class="ch-nest-label" for="ch-nest-sel">Anidar bajo</label>
@@ -160,50 +265,72 @@ async function openPopup(rect) {
   popEl.innerHTML = popupSkeleton();
   position(popEl, rect);
   document.body.appendChild(popEl);
-  popEl.querySelector('[data-role="quote"]').textContent = savedText;
-
   const els = {
     tag: popEl.querySelector('[data-role="ctx-tag"]'),
     dot: popEl.querySelector('[data-role="dot"]'),
     combo: popEl.querySelector('[data-role="combo"]'),
     chevron: popEl.querySelector('[data-role="chevron"]'),
     menu: popEl.querySelector('[data-role="menu"]'),
-    cats: popEl.querySelector('[data-role="cats"]'),
+    catDot: popEl.querySelector('[data-role="cat-dot"]'),
+    catSelect: popEl.querySelector('[data-role="cat-select"]'),
     nest: popEl.querySelector('[data-role="nest"]'),
     nestSelect: popEl.querySelector('[data-role="nest-select"]'),
     microcopy: popEl.querySelector('[data-role="microcopy"]'),
     cancel: popEl.querySelector('[data-role="cancel"]'),
     save: popEl.querySelector('[data-role="save"]'),
     status: popEl.querySelector('[data-role="status"]'),
+    quote: popEl.querySelector('[data-role="quote"]'),
+    quoteChip: popEl.querySelector('[data-role="quote-chip"]'),
+    quoteText: popEl.querySelector('[data-role="quote-text"]'),
+    quoteLen: popEl.querySelector('[data-role="quote-len"]'),
+    quoteToggle: popEl.querySelector('[data-role="quote-toggle"]'),
   };
 
   let category = "idea";
+  let quoteExpanded = false;
   let selectedCtx = contextForThisPage(contexts);
 
-  // Build the 4 category swatches from the store's CATEGORIES.
-  const catButtons = {};
-  for (const key of ["title", "idea", "argument", "evidence"]) {
-    const meta = Store.CATEGORIES[key];
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "ch-cat" + (key === category ? " on" : "");
-    btn.style.setProperty("--cat", meta.dot);
-    btn.style.setProperty("--cat-bg", meta.hlBg);
-    btn.style.setProperty("--cat-fg", meta.hlFg);
-    btn.title = meta.label;
-    btn.innerHTML = '<span class="sw"></span><span></span>';
-    btn.querySelector(".sw").style.background = meta.dot;
-    btn.querySelector("span:last-child").textContent = meta.label;
-    btn.addEventListener("click", () => {
-      category = key;
-      Object.entries(catButtons).forEach(([k, b]) =>
-        b.classList.toggle("on", k === key)
-      );
-      refreshNest();
-    });
-    catButtons[key] = btn;
-    els.cats.appendChild(btn);
+  /** Render truncated or expanded text inside the quote block. */
+  function renderQuoteText() {
+    const isLong = savedText.length > TRUNCATE_AT;
+    els.quoteText.textContent =
+      isLong && !quoteExpanded
+        ? savedText.slice(0, PREVIEW_LEN) + "…"
+        : savedText;
+    els.quoteText.classList.toggle("expanded", quoteExpanded);
+    els.quoteLen.hidden = !isLong;
+    els.quoteLen.textContent = savedText.length + " chars";
+    els.quoteToggle.hidden = !isLong;
+    els.quoteToggle.textContent = quoteExpanded ? "colapsar" : "ver todo";
   }
+
+  /** Sync quote border color and category chip with the active category. */
+  function updateQuotePreview() {
+    const meta = Store.CATEGORIES[category];
+    els.quote.style.setProperty("--ch-quote-border", meta.dot);
+    els.quoteChip.style.setProperty("--chip-dot", meta.dot);
+    els.quoteChip.style.setProperty("--chip-bg", meta.hlBg);
+    els.quoteChip.style.setProperty("--chip-fg", meta.hlFg);
+    els.quoteChip.textContent = meta.label;
+    renderQuoteText();
+  }
+
+  els.quoteToggle.addEventListener("click", () => {
+    quoteExpanded = !quoteExpanded;
+    renderQuoteText();
+  });
+
+  function paintCatDot() {
+    els.catDot.style.background = Store.CATEGORIES[category].dot;
+  }
+  els.catSelect.value = category;
+  paintCatDot();
+  els.catSelect.addEventListener("change", () => {
+    category = els.catSelect.value;
+    paintCatDot();
+    updateQuotePreview();
+    refreshNest();
+  });
 
   function paintContext() {
     const name = selectedCtx ? selectedCtx.name : els.combo.value.trim();
@@ -273,10 +400,17 @@ async function openPopup(rect) {
       });
       els.menu.appendChild(opt);
     }
+    if (!matches.length && !typed) {
+      const hint = document.createElement("div");
+      hint.className = "ch-combo-empty";
+      hint.textContent = "Escribe un nombre para crear un contexto";
+      els.menu.appendChild(hint);
+    }
   }
 
   if (selectedCtx) els.combo.value = selectedCtx.name;
   paintContext();
+  updateQuotePreview();
   await refreshNest();
 
   els.combo.addEventListener("focus", () => {
@@ -328,13 +462,16 @@ async function openPopup(rect) {
         isText && els.nestSelect && els.nestSelect.value
           ? els.nestSelect.value
           : null;
-      await Store.addItem(ctx.id, {
+      const { rangePrefix, rangeSuffix } = extractRangeContext(savedRange);
+      const savedItem = await Store.addItem(ctx.id, {
         text: savedText,
         category,
         linkedSubtitleId,
         sourceUrl: location.href,
+        rangePrefix,
+        rangeSuffix,
       });
-      highlightSavedRange(category);
+      highlightSavedRange(category, savedItem.id);
       showStatus(els.status, "Guardado ✓", false);
       setTimeout(teardown, 500);
     } catch (err) {
@@ -364,11 +501,159 @@ function showStatus(el, msg, isError) {
   el.classList.toggle("ch-status-error", !!isError);
 }
 
+// ----- TextQuoteSelector helpers (range persistence) -----
+
+/**
+ * Extract up to 50 chars of surrounding text from a Range for anchoring.
+ * Returns { rangePrefix, rangeSuffix } — both null on error or missing range.
+ */
+function extractRangeContext(range) {
+  if (!range) return { rangePrefix: null, rangeSuffix: null };
+  try {
+    const preRange = document.createRange();
+    preRange.setStart(document.body, 0);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const rangePrefix = preRange.toString().slice(-50);
+
+    const postRange = document.createRange();
+    postRange.setStart(range.endContainer, range.endOffset);
+    postRange.setEnd(document.body, document.body.childNodes.length);
+    const rangeSuffix = postRange.toString().slice(0, 50);
+
+    return { rangePrefix, rangeSuffix };
+  } catch (_) {
+    return { rangePrefix: null, rangeSuffix: null };
+  }
+}
+
+/**
+ * Collect visible text nodes under root (excluding .ch-hl children)
+ * with their cumulative character offsets.
+ */
+function buildTextIndex(root) {
+  const nodes = [];
+  let offset = 0;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(n) {
+      if (n.parentElement && n.parentElement.closest('.ch-hl')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let node;
+  while ((node = walker.nextNode())) {
+    nodes.push({ node, start: offset });
+    offset += node.textContent.length;
+  }
+  return nodes;
+}
+
+/** Map a character position in the concatenated text back to a {node, offset}. */
+function posToNodeOffset(textNodes, pos) {
+  for (let i = textNodes.length - 1; i >= 0; i--) {
+    if (textNodes[i].start <= pos) {
+      return { node: textNodes[i].node, offset: pos - textNodes[i].start };
+    }
+  }
+  return null;
+}
+
+/**
+ * Locate item.text in the current DOM using TextQuoteSelector logic.
+ * Level 1: anchored search (prefix + exact + suffix).
+ * Level 2: exact only if unique on the page.
+ * Returns a live Range, or null if not found.
+ */
+function findRangeForItem(item, textNodes, fullText) {
+  const exact = item.text;
+  const prefix = item.rangePrefix || '';
+  const suffix = item.rangeSuffix || '';
+
+  if (prefix || suffix) {
+    const idx = fullText.indexOf(prefix + exact + suffix);
+    if (idx !== -1) {
+      const s = posToNodeOffset(textNodes, idx + prefix.length);
+      const e = posToNodeOffset(textNodes, idx + prefix.length + exact.length);
+      if (s && e) {
+        const r = document.createRange();
+        r.setStart(s.node, s.offset);
+        r.setEnd(e.node, e.offset);
+        return r;
+      }
+    }
+  }
+
+  // Fallback: unique exact match
+  const firstIdx = fullText.indexOf(exact);
+  if (firstIdx !== -1 && fullText.indexOf(exact, firstIdx + 1) === -1) {
+    const s = posToNodeOffset(textNodes, firstIdx);
+    const e = posToNodeOffset(textNodes, firstIdx + exact.length);
+    if (s && e) {
+      const r = document.createRange();
+      r.setStart(s.node, s.offset);
+      r.setEnd(e.node, e.offset);
+      return r;
+    }
+  }
+
+  return null;
+}
+
+/** Wrap a Range in a .ch-hl mark element with a data-ch-id attribute. */
+function applyMark(range, category, itemId) {
+  const mark = document.createElement('mark');
+  mark.className = 'ch-hl ch-hl-' + (category || 'idea');
+  mark.dataset.chId = itemId;
+  try {
+    range.surroundContents(mark);
+  } catch (_) {
+    try {
+      mark.appendChild(range.extractContents());
+      range.insertNode(mark);
+    } catch (__) {
+      // range spans partial element boundaries — skip
+    }
+  }
+}
+
+/** Re-apply all saved highlights for the current page URL on load. */
+async function reapplyHighlights() {
+  try {
+    const currentUrl = location.href;
+    const data = await Store.readAll();
+    const candidates = [];
+    for (const ctx of Object.values(data.contexts)) {
+      for (const it of ctx.items || []) {
+        if (it.sourceUrl === currentUrl && it.rangePrefix != null) candidates.push(it);
+      }
+    }
+    if (!candidates.length) return;
+    for (const item of candidates) {
+      // Rebuild text index after each mark insertion to keep positions accurate.
+      const textNodes = buildTextIndex(document.body);
+      const range = findRangeForItem(item, textNodes, textNodes.map(n => n.node.textContent).join(''));
+      if (range) applyMark(range, item.category, item.id);
+    }
+  } catch (err) {
+    console.warn('[CH] reapplyHighlights error:', err);
+  }
+}
+
+/** Remove a highlight <mark> by item id, restoring its text in place. */
+function removeHighlightById(itemId) {
+  const mark = document.querySelector('[data-ch-id="' + CSS.escape(itemId) + '"]');
+  if (!mark || !mark.parentNode) return;
+  const parent = mark.parentNode;
+  while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+  parent.removeChild(mark);
+  parent.normalize();
+}
+
 // ----- page highlight -----
-function highlightSavedRange(category) {
+function highlightSavedRange(category, itemId) {
   if (!savedRange) return;
   const mark = document.createElement("mark");
   mark.className = "ch-hl ch-hl-" + (category || "idea");
+  if (itemId) mark.dataset.chId = itemId;
   try {
     savedRange.surroundContents(mark);
   } catch (_) {
@@ -379,6 +664,18 @@ function highlightSavedRange(category) {
       /* selection spans complex nodes — skip highlighting */
     }
   }
+}
+
+// ----- message listener (remove highlight from page) -----
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'CH_REMOVE_HL') removeHighlightById(msg.itemId);
+});
+
+// ----- initialization: re-apply saved highlights for this page -----
+if ('requestIdleCallback' in window) {
+  requestIdleCallback(() => reapplyHighlights(), { timeout: 2000 });
+} else {
+  setTimeout(reapplyHighlights, 100);
 }
 
 // ----- positioning -----

@@ -1,0 +1,40 @@
+{
+  "id": 14,
+  "status": "approved",
+  "createdAt": "2026-06-24",
+  "author": "Spec-Writer agent",
+  "title": "Preview dinámico del texto seleccionado en el popup de captura",
+  "description": "El popup de captura tiene un bloque .ch-quote que muestra el texto seleccionado de forma estática (borde siempre azul-violeta, sin truncación inteligente, sin feedback de categoría). Esta feature convierte ese bloque en un preview dinámico: el borde refleja el color de la categoría activa en tiempo real, un chip de categoría identifica cómo quedará etiquetada la nota, y las selecciones largas se truncan con un contador de caracteres y un toggle 'ver todo / colapsar'.",
+  "acceptance_criteria": [
+    "AC-1: El borde izquierdo de .ch-quote muestra el color de la categoría activa (dot color de Store.CATEGORIES) inmediatamente al abrir el popup y cada vez que el usuario cambia de categoría. El valor por defecto (categoría 'idea') ya refleja el color correcto al abrir.",
+    "AC-2: Dentro de .ch-quote aparece un chip compacto con un punto de color y el nombre de la categoría activa (p.ej. '● Idea'). El chip se actualiza sin latencia al cambiar de categoría.",
+    "AC-3: Si savedText.length > 150, el texto se trunca a los primeros 120 caracteres seguidos de '…'. Un badge monocromático muestra el total de caracteres (p.ej. '312 chars'). Un botón 'ver todo' expande el texto completo.",
+    "AC-4: Al hacer clic en 'ver todo' el texto completo se muestra y el botón cambia a 'colapsar'. Al hacer clic en 'colapsar' vuelve al texto truncado.",
+    "AC-5: El texto que se persiste en chrome.storage.local al guardar es siempre el savedText completo, independientemente del estado expand/colapsar del preview.",
+    "AC-6: El chip de categoría, el badge de caracteres y el botón toggle son elementos inline dentro de .ch-quote; no hay elementos fuera de .ch-quote nuevos en el DOM del popup.",
+    "AC-7: En dark mode los colores del chip (bg, fg, dot) siguen siendo legibles; los colores vienen de Store.CATEGORIES (valores hex absolutos) que ya funcionan en ambos modos.",
+    "AC-8: init.sh pasa sin errores de sintaxis (node --check / ESM check sobre content.js).",
+    "AC-9: pnpm run build en vite-extension/ termina sin errores ni warnings de módulos."
+  ],
+  "implementation_notes": {
+    "files_to_edit": [
+      "vite-extension/src/content.js",
+      "vite-extension/src/content.css"
+    ],
+    "files_not_to_touch": [
+      "outputs/ (legacy congelado)",
+      "vite-extension/src/sidebar.js",
+      "vite-extension/src/storage.js"
+    ],
+    "approach": {
+      "popupSkeleton": "Reestructurar el interior de .ch-quote en: (1) un .ch-quote-header con [.ch-quote-chip | .ch-quote-meta(.ch-quote-len + button.ch-quote-toggle)], (2) un .ch-quote-text para el texto. Todos los nuevos elementos tienen data-role para ser referenciados en JS sin buscar por clase.",
+      "openPopup": "Añadir refs: quoteText, quoteChip, quoteLen, quoteToggle. Añadir updateQuotePreview() que setea --ch-quote-border en els.quote, actualiza chip texto+colores inline vars, y llama renderQuoteText(). Llamar updateQuotePreview() en init y dentro del swatch click handler. Añadir quoteExpanded state y wiring del toggle.",
+      "css": "Convertir .ch-quote a flex column. Añadir .ch-quote-header, .ch-quote-chip, .ch-quote-meta, .ch-quote-len, .ch-quote-toggle, .ch-quote-text. La border-left usa var(--ch-quote-border, var(--accent)) para degradar con gracia."
+    },
+    "truncation_constants": {
+      "TRUNCATE_AT": 150,
+      "PREVIEW_LEN": 120
+    }
+  },
+  "dependencies": []
+}

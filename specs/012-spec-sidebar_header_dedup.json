@@ -1,0 +1,23 @@
+{
+  "id": 12,
+  "status": "approved",
+  "createdAt": "2026-06-23",
+  "author": "Claude Sonnet 4.6",
+  "title": "Eliminar cabecera duplicada del panel lateral",
+  "description": "El panel lateral muestra dos cabeceras: la nativa de Chrome (nombre de la extensión + botones anclar/cerrar) y un .chrome-bar propio (logo 'C' + título 'Context Highlighter' + toggle de tema). La barra propia es redundante. Esta feature la elimina y relocaliza el toggle de tema al final del rail, recuperando espacio vertical y simplificando la jerarquía visual.",
+  "acceptance_criteria": [
+    "sidebar.html no contiene el div .chrome-bar ni sus hijos (.logo, .title, el theme-toggle original).",
+    "El botón #theme-toggle existe dentro de <nav class='rail'> como último hijo, con margin-top: auto para pegarse al fondo.",
+    "La única cabecera 'Context Highlighter' visible es la nativa del panel de Chrome.",
+    "El toggle de tema sigue cambiando entre claro y oscuro, y el estado persiste en localStorage.",
+    "sidebar.css no contiene las reglas .chrome-bar, .logo, ni .chrome-bar .title (la clase .icon-btn se conserva).",
+    "init.sh pasa sin errores de sintaxis en todos los archivos JS y JSON."
+  ],
+  "implementation_notes": {
+    "sidebar_html": "Eliminar el bloque <div class='chrome-bar'>…</div> completo. Añadir <button id='theme-toggle' class='icon-btn' title='Cambiar tema'>◐</button> como último hijo de <nav class='rail'>, antes del cierre de </nav>.",
+    "sidebar_css": "Eliminar las reglas: .chrome-bar { … }, .logo { … }, .chrome-bar .title { … }. Conservar .icon-btn { … } (usa el toggle en el rail). Añadir #theme-toggle { margin-top: auto; } o .rail #theme-toggle { margin-top: auto; } para empujarlo al fondo del flex-column del rail.",
+    "sidebar_js": "Sin cambios. initTheme($('#theme-toggle')) sigue funcionando por ID.",
+    "sidebar_theme_js": "Sin cambios."
+  },
+  "dependencies": []
+}

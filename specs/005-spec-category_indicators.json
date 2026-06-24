@@ -1,0 +1,17 @@
+{
+  "id": 5,
+  "status": "implemented",
+  "createdAt": "2026-06-22",
+  "author": "human",
+  "title": "Badges semánticos para indicadores de categoría",
+  "description": "Los emojis 🟡🔵🟢 en la Vista y los cuadraditos de 12 px en el popup no comunican significado sin memorizar el código de color. Reemplazarlos por badges de texto + fondo tintado (patrón Notion/Linear), ubicados en la fila de metadatos de cada ítem. El cambio requiere migrar la Vista de render Markdown a render item-by-item, lo que también cierra la Feature #1.",
+  "acceptance_criteria": [
+    "Cada ítem de tipo text en la Vista muestra un badge [Idea]/[Argumento]/[Evidencia] en su fila de metadatos.",
+    "Ningún ítem muestra emojis 🟡/🔵/🟢 en la Vista (sí siguen apareciendo en el Editor).",
+    "El botón activo en el popup de captura muestra fondo tintado del color de la categoría, no un ring.",
+    "El indicador de color en el popup es un círculo de 8 px, no un cuadrado.",
+    "Los badges tienen overrides correctos en dark mode.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "dependencies": [1]
+}

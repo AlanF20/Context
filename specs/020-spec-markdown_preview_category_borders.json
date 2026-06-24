@@ -1,0 +1,41 @@
+{
+  "id": 20,
+  "status": "approved",
+  "createdAt": "2026-06-24",
+  "author": "harness",
+  "title": "Bordes de categoría en el preview Markdown de la Vista",
+  "description": "El preview Markdown de la Vista (feature #18) renderiza los ítems capturados como párrafos <p> planos con el emoji de categoría visible (🟡/🔵/🟢). Esta feature añade un renderer personalizado de `marked` que detecta esos emojis al inicio de cada párrafo, los elimina del texto visible y envuelve el bloque en un <div class='md-cat-item cat-{category}'> con un borde izquierdo de 3 px tintado con el color semántico de la categoría — los mismos tokens CSS --cat-*-border que ya existen en sidebar.css. El cambio es puramente visual: ni buildMd, ni parseMd, ni el export .md, ni el Editor Monaco reciben modificaciones.",
+  "acceptance_criteria": [
+    "Los párrafos con prefijo 🟡 se renderizan como <div class='md-cat-item cat-idea'><p>texto sin emoji</p></div> con border-left de 3px en color --cat-idea-border.",
+    "Los párrafos con prefijo 🔵 se renderizan como <div class='md-cat-item cat-argument'><p>…</p></div> con border-left en --cat-arg-border.",
+    "Los párrafos con prefijo 🟢 se renderizan como <div class='md-cat-item cat-evidence'><p>…</p></div> con border-left en --cat-evidence-border.",
+    "El emoji de categoría (🟡/🔵/🟢) ya NO aparece en el texto visible del preview.",
+    "Los subtítulos (## headings → <h2>) se renderizan sin cambios.",
+    "La línea _Fuente: dominio_ (<p><em>…</em></p>) se renderiza sin cambios.",
+    "Los ítems sin categoría (texto sin prefijo emoji) se renderizan como <p> normal sin wrapper.",
+    "Los ítems de lista multi-línea (contienen \\n en buildMd, sin emoji) se renderizan como <ul>/<ol> sin wrapper.",
+    "Los bordes son correctos en modo claro y oscuro (tokens --cat-*-border ya definidos en ambos temas).",
+    "buildMd, parseMd y exportContextToMarkdown permanecen sin cambios.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_plan": {
+    "files": [
+      {
+        "path": "vite-extension/src/sidebar/markdown.js",
+        "change": "Añadir función buildCategoryRenderer() que devuelve un marked.Renderer con override de `paragraph`. El renderer detecta emojis 🟡/🔵/🟢 al inicio del texto procesado, elimina el emoji y envuelve el contenido en <div class='md-cat-item cat-{cat}'>. Pasar el renderer a marked.parse({ renderer })."
+      },
+      {
+        "path": "vite-extension/src/sidebar.css",
+        "change": "Añadir reglas .vista-md-preview .md-cat-item (border-left: 3px solid var(--border-strong); padding-left: 10px; margin: 0 0 10px;) y overrides .cat-idea/.cat-argument/.cat-evidence con border-left-color de los tokens existentes. También .md-cat-item p { margin: 0; } para evitar doble margen."
+      }
+    ],
+    "no_changes": [
+      "vite-extension/src/storage.js (buildMd, parseMd, CATEGORIES)",
+      "vite-extension/src/sidebar/vista.js",
+      "vite-extension/src/sidebar/store.js",
+      "Cualquier archivo de outputs/ (legado congelado)"
+    ]
+  },
+  "dependencies": [18]
+}

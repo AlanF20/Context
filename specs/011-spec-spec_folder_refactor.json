@@ -1,0 +1,17 @@
+{
+  "id": 11,
+  "status": "approved",
+  "createdAt": "2026-06-23",
+  "author": "human",
+  "title": "Mover specs a specs/ con nomenclatura 001-spec-<desc>.json",
+  "description": "El harness almacena las specs como archivos Markdown en docs/spec_*.md. Migrar a una carpeta dedicada specs/ con formato JSON estructurado y nomenclatura NNN-spec-<name>.json donde NNN es el id del feature con cero-padding a 3 dígitos. Actualizar init.sh (ya valida specs/*.json), CLAUDE.md, AGENTS.md y feature_list.json para reflejar el nuevo contrato.",
+  "acceptance_criteria": [
+    "Existe un directorio specs/ en la raíz del repo.",
+    "Cada feature con spec_path tiene un archivo specs/NNN-spec-<name>.json válido (campos id, status, createdAt, author, title, description, acceptance_criteria, dependencies).",
+    "feature_list.json apunta a los nuevos paths en specs/ para todos los features que tenían spec_path.",
+    "init.sh pasa sin errores: el step 3 valida y reporta [OK] para cada archivo en specs/.",
+    "CLAUDE.md y AGENTS.md documentan la nueva convención.",
+    "Los archivos docs/spec_*.md pueden mantenerse como referencia histórica pero spec_path ya no los referencia."
+  ],
+  "dependencies": []
+}

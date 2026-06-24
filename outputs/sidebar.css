@@ -79,28 +79,6 @@ body {
   overflow: hidden;
 }
 
-/* ===== Chrome bar ===== */
-.chrome-bar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 12px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
-}
-.logo {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-fg);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 13px;
-}
-.chrome-bar .title { font-weight: 700; font-size: 13px; flex: 1 1 auto; }
 .icon-btn {
   width: 28px;
   height: 28px;
@@ -191,6 +169,7 @@ body {
   flex: 0 0 auto;
 }
 .rail-add:hover { color: var(--fg); border-color: var(--fg-3); }
+.rail-theme { margin-top: auto; }
 
 /* ===== Main column ===== */
 .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }

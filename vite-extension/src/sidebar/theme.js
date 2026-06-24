@@ -5,10 +5,15 @@
  * Monaco editor stays dark and the underlined web page is never themed.
  * The choice persists in localStorage.
  */
+import { createElement, Sun, Moon } from "lucide";
+
 const THEME_KEY = "ch.theme";
 
 function setIcon(toggleEl, theme) {
-  toggleEl.textContent = theme === "dark" ? "☾" : "◐";
+  const icon = createElement(theme === "dark" ? Moon : Sun, { width: 16, height: 16 });
+  icon.style.pointerEvents = "none";
+  toggleEl.innerHTML = "";
+  toggleEl.appendChild(icon);
 }
 
 function apply(theme, toggleEl) {
