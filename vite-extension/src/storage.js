@@ -215,6 +215,8 @@ export async function addItem(contextId, opts) {
     createdAt: Date.now(),
     rangePrefix: opts.rangePrefix != null ? String(opts.rangePrefix).slice(0, 50) : null,
     rangeSuffix: opts.rangeSuffix != null ? String(opts.rangeSuffix).slice(0, 50) : null,
+    // Raw DOM text for re-anchoring when item.text is Markdown (e.g. list captures).
+    rangeText: opts.rangeText != null ? String(opts.rangeText) : null,
   };
 
   // NOTE: duplicates are allowed by design — we never dedupe here.

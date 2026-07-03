@@ -1,0 +1,52 @@
+{
+  "id": 25,
+  "status": "approved",
+  "createdAt": "2026-06-30",
+  "author": "Spec-Writer Agent",
+  "title": "Fix: bordes fantasma en re-aplicación de resaltados al recargar",
+  "description": "Al recargar la página, los resaltados re-aplicados muestran de forma intermitente bordes de color (arriba y/o abajo del texto resaltado). El bug tiene dos causas raíz: (1) `buildTextIndex` concatena los nodos de texto sin separador, lo que permite que `findRangeForItem` resuelva un `Range` que cruza límites de elementos del DOM; cuando `surroundContents()` falla, el fallback `extractContents()` fragmenta los nodos parcialmente, distorsionando el DOM. (2) `box-decoration-break: clone` con `border-radius: 2px` hace que cada fragmento de línea de un `<mark>` mutilineé renderice sus propios arcos de esquina, que aparecen visualmente como bordes de color sobre/bajo las líneas adyacentes. La corrección combina: (A) separador `\\x00` entre nodos de texto en el índice para que ningún match cruce límites; (B) `document.body.normalize()` después de cada `applyMark` para limpiar nodos de texto vacíos dejados por `extractContents`; (C) eliminar `border-radius` de `.ch-hl` para suprimir los artefactos de arco en renders multilinea.",
+  "acceptance_criteria": [
+    "Al recargar una página con resaltados guardados, ningún resaltado muestra un borde de color (ni arriba ni abajo del texto marcado) — ni en la primera carga ni en recargas sucesivas.",
+    "Los resaltados que antes fallaban silenciosamente (surroundContents cruzaba límite de elemento) ahora se omiten limpiamente sin distorsionar el DOM: el texto no-marcable se deja intacto.",
+    "Los resaltados cuyo texto cae enteramente dentro de un único nodo de texto siguen aplicándose correctamente.",
+    "No aparecen nodos de texto vacíos ni elementos duplicados en el DOM tras la re-aplicación (verificable con DevTools → Elements).",
+    "La propiedad `box-decoration-break: clone` se mantiene (necesaria para el padding multi-línea), pero `border-radius` se elimina de `.ch-hl` para suprimir los arcos de esquina.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_plan": {
+    "files_to_edit": [
+      "vite-extension/src/content.js",
+      "vite-extension/src/content.css"
+    ],
+    "changes": [
+      {
+        "file": "vite-extension/src/content.js",
+        "function": "buildTextIndex",
+        "change": "Añadir una constante SEP = '\\x00'. Después de construir el array de nodos, generar fullText con `textNodes.map(n => n.node.textContent).join(SEP)`. Actualizar los offsets acumulados en el array para que cada nodo empiece DESPUÉS del SEP del nodo anterior (start += SEP.length para n > 0). Exportar SEP como constante interna."
+      },
+      {
+        "file": "vite-extension/src/content.js",
+        "function": "findRangeForItem",
+        "change": "Después de encontrar un match con indexOf, verificar que la subcadena `fullText.slice(matchStart, matchEnd)` no contenga `\\x00`. Si contiene un separador, el match cruza un límite de nodo → descartar ese match y continuar buscando (o pasar al fallback de nivel 2). Solo construir el Range si el match es limpio (sin SEP)."
+      },
+      {
+        "file": "vite-extension/src/content.js",
+        "function": "reapplyHighlights",
+        "change": "Después de cada llamada a `applyMark()`, llamar a `document.body.normalize()` antes de reconstruir el texto-índice. Esto fusiona nodos de texto adyacentes vacíos/fragmentados dejados por `extractContents()`, estabilizando los offsets para los ítems siguientes."
+      }
+    ]
+  },
+  "css_change": {
+    "file": "vite-extension/src/content.css",
+    "selector": ".ch-hl",
+    "change": "Eliminar `border-radius: 2px` de `.ch-hl`. Mantener `box-decoration-break: clone` y `-webkit-box-decoration-break: clone` (necesarios para padding correcto en resaltados multilinea). El `border-radius: 0` (default) suprime los arcos de esquina que aparecen como bordes fantasma."
+  },
+  "out_of_scope": [
+    "Soporte de SPAs (MutationObserver para navegación sin recarga): pendiente conocido.",
+    "Re-aplicación de ítems creados desde el editor Markdown (rangePrefix: null): ya excluidos correctamente.",
+    "Resaltados cuyos items.text contienen saltos de línea o whitespace normalizado de forma diferente: limitación existente, no agravada por este fix."
+  ],
+  "dependencies": [4],
+  "research_path": "docs/research_highlight_persistence_border_fix.md"
+}

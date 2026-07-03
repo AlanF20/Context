@@ -8,6 +8,11 @@
  *
  * createEditorController() returns a small stateful API so the main controller
  * doesn't have to know about Monaco internals.
+ *
+ * mount() options:
+ *   onSync(ctx)  — called after each debounced save (refresh rail/counter).
+ *   onSave(ctxId, md) — async; replaces the direct Store.replaceContextFromMarkdown
+ *                       call so sidebar.js can inject history snapshotting.
  */
 import { Store } from "./store.js";
 import { escapeHtml } from "./dom.js";
@@ -17,23 +22,28 @@ export function createEditorController() {
   let monacoReady = null;
   let syncTimer = null;
   let currentCtxId = null;
-  const buffers = {}; // per-context edited text (kept so the cursor survives)
+  let tabDirtyEl = null;
+  const buffers = {};
 
   function setStatus(el, md) {
     if (el) el.textContent = `Markdown · UTF-8 · ${md.split("\n").length} líneas`;
   }
 
-  /** Debounced live parse → persist while typing. */
-  function scheduleSync(ctxId, value, onSync) {
+  function scheduleSync(ctxId, value, onSave, onSync) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(async () => {
-      await Store.replaceContextFromMarkdown(ctxId, value);
+      if (onSave) {
+        await onSave(ctxId, value);
+      } else {
+        await Store.replaceContextFromMarkdown(ctxId, value);
+      }
+      // Mark clean after successful save.
+      if (tabDirtyEl) tabDirtyEl.hidden = true;
       if (onSync) onSync();
     }, 350);
   }
 
-  /** Build the editor chrome and mount Monaco inside `mountEl`. */
-  async function mount(mountEl, ctx, { onSync } = {}) {
+  async function mount(mountEl, ctx, { onSync, onSave } = {}) {
     dispose();
     currentCtxId = ctx.id;
     const md = buffers[ctx.id] != null ? buffers[ctx.id] : Store.buildMd(ctx);
@@ -42,13 +52,16 @@ export function createEditorController() {
     wrap.className = "editor-wrap";
     wrap.innerHTML =
       '<div class="tab-bar"><span class="dot"></span>' +
-      `<span>${escapeHtml(ctx.name)}.md</span>` +
+      '<span class="tab-title">' + escapeHtml(ctx.name) + '.md' +
+        '<span class="tab-dirty" hidden aria-label="Cambios sin guardar">●</span>' +
+      '</span>' +
       '<span class="muted">Editando documento completo</span></div>' +
       '<div id="editor"></div>' +
       '<div class="status-bar" id="status-bar"></div>';
     mountEl.innerHTML = "";
     mountEl.appendChild(wrap);
 
+    tabDirtyEl = wrap.querySelector(".tab-dirty");
     const statusBar = wrap.querySelector("#status-bar");
     const host = wrap.querySelector("#editor");
     setStatus(statusBar, md);
@@ -70,11 +83,19 @@ export function createEditorController() {
         lineHeight: 20,
         padding: { top: 8 },
       });
+
       editor.onDidChangeModelContent(() => {
         const value = editor.getValue();
         buffers[ctx.id] = value;
         setStatus(statusBar, value);
-        scheduleSync(ctx.id, value, onSync);
+        // Show dirty indicator on change.
+        if (tabDirtyEl) tabDirtyEl.hidden = false;
+        scheduleSync(ctx.id, value, onSave, onSync);
+      });
+
+      // Cmd+S / Ctrl+S: immediate save.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        flush(onSave);
       });
     } catch (err) {
       console.error("[ContextHighlighter] Monaco failed:", err);
@@ -84,31 +105,55 @@ export function createEditorController() {
     }
   }
 
-  /** Persist the current value immediately (used when leaving the editor). */
-  async function flush() {
+  async function flush(onSave) {
     clearTimeout(syncTimer);
     if (editor && currentCtxId) {
       const value = editor.getValue();
       buffers[currentCtxId] = value;
-      await Store.replaceContextFromMarkdown(currentCtxId, value);
+      if (onSave) {
+        await onSave(currentCtxId, value);
+      } else {
+        await Store.replaceContextFromMarkdown(currentCtxId, value);
+      }
+      if (tabDirtyEl) tabDirtyEl.hidden = true;
     }
   }
 
   function dispose() {
+    clearTimeout(syncTimer);
     if (editor) {
       editor.dispose();
       editor = null;
     }
+    tabDirtyEl = null;
+    currentCtxId = null;
   }
 
-  /** Current edited text for a context (or null if never edited). */
   function peek(ctxId) {
     return buffers[ctxId] != null ? buffers[ctxId] : null;
   }
 
-  /** Drop a context's buffer so it regenerates from fresh state. */
   function invalidate(ctxId) {
     delete buffers[ctxId];
+  }
+
+  /**
+   * Normalize the current document via parseMd → buildMd.
+   * Uses Monaco's executeEdits so the operation participates in Monaco's
+   * own undo stack (Cmd+Z within Monaco can undo the format).
+   */
+  function applyFormat(ctx) {
+    if (!editor) return;
+    const current = editor.getValue();
+    const parsed = Store.parseMd(current);
+    const formatted = Store.buildMd({
+      name: parsed.name || (ctx && ctx.name) || "Untitled",
+      items: parsed.items,
+    });
+    if (formatted === current) return; // already normalized
+    const model = editor.getModel();
+    editor.executeEdits("format", [{ range: model.getFullModelRange(), text: formatted }]);
+    editor.pushUndoStop();
   }
 
   // ---- Monaco lazy loader + theme ----
@@ -135,7 +180,6 @@ export function createEditorController() {
     return monacoReady;
   }
 
-  // Dark theme tuned toward the spec's Markdown syntax colors (§2.4).
   function defineTheme(monaco) {
     monaco.editor.defineTheme("ch-md-dark", {
       base: "vs-dark",
@@ -158,5 +202,5 @@ export function createEditorController() {
     });
   }
 
-  return { mount, flush, dispose, peek, invalidate };
+  return { mount, flush, dispose, peek, invalidate, applyFormat };
 }

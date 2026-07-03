@@ -7,16 +7,21 @@
  *   - vista.js   → the Markdown preview tab
  *   - editor.js  → the Monaco editor tab
  *   - theme.js   → light/dark toggle
- * Data flows through window.ContextStore (storage.js), re-exported by store.js.
+ *   - history.js → undo/redo stack
+ *   - find.js    → floating find/replace bar
+ * Data flows through chrome.storage.local, accessed via store.js (Store).
  * ---------------------------------------------------------------------------
  */
-import { createElement, Sparkles, Download, Pencil } from "lucide";
+import { createElement, Sparkles, Download } from "lucide";
 import { $ } from "./sidebar/dom.js";
 import { Store } from "./sidebar/store.js";
 import { initTheme } from "./sidebar/theme.js";
 import { renderRail } from "./sidebar/rail.js";
 import { renderVista, createDocEditor } from "./sidebar/vista.js";
 import { createEditorController } from "./sidebar/editor.js";
+import { createHistoryManager } from "./sidebar/history.js";
+import { createFindBar } from "./sidebar/find.js";
+import { confirmDelete } from "./sidebar/modal.js";
 
 const railList = $("#rail-list");
 const railAdd = $("#rail-add");
@@ -30,22 +35,79 @@ let selectedId = null;
 let mode = "vista"; // "vista" | "vista-edit" | "editor"
 const editor = createEditorController();
 const docEditor = createDocEditor();
+const historyMgr = createHistoryManager();
+const findBar = createFindBar();
 
 // =======================================================================
 //  Init
 // =======================================================================
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   initTheme(themeToggle);
   railAdd.addEventListener("click", onCreateContext);
+  document.addEventListener("keydown", onGlobalKeydown);
+
+  // Pre-select the context requested by a fast-save from the capture toolbar.
+  const nav = await chrome.storage.local.get('CH_NAV');
+  if (nav.CH_NAV) {
+    selectedId = nav.CH_NAV;
+    chrome.storage.local.remove('CH_NAV');
+  }
+
   render();
 });
 
-// Live-refresh from page saves, but not while editing (avoid clobbering text).
+// Live-refresh from page saves, but not while editing (avoid clobbering).
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes[Store.STORAGE_KEY] && mode === "vista") {
-    render();
+  if (area !== "local") return;
+
+  // Navigate to context after a fast-save from the capture toolbar.
+  if (changes.CH_NAV?.newValue) {
+    onSelectContext(changes.CH_NAV.newValue);
+    chrome.storage.local.remove('CH_NAV');
   }
+
+  if (!changes[Store.STORAGE_KEY]) return;
+
+  // Detect items added externally (content script capture) and push an undo
+  // snapshot of the state that existed BEFORE the capture.
+  const oldCtxs = changes[Store.STORAGE_KEY].oldValue?.contexts || {};
+  const newCtxs = changes[Store.STORAGE_KEY].newValue?.contexts || {};
+  for (const [id, newCtx] of Object.entries(newCtxs)) {
+    const oldCtx = oldCtxs[id];
+    if (oldCtx && newCtx.items.length > oldCtx.items.length) {
+      historyMgr.push(id, serialize(oldCtx));
+    }
+  }
+
+  if (mode === "vista") render();
 });
+
+// =======================================================================
+//  History helpers
+// =======================================================================
+
+function serialize(ctx) {
+  return JSON.stringify({ name: ctx.name, items: ctx.items });
+}
+
+async function restore(ctxId, snap) {
+  const { name, items } = JSON.parse(snap);
+  const data = await Store.readAll();
+  if (!data.contexts[ctxId]) return;
+  data.contexts[ctxId].name = name;
+  data.contexts[ctxId].items = items;
+  await Store.writeAll(data);
+}
+
+/**
+ * Save wrapper that snapshots the current stored state before writing.
+ * Passed as onSave to both docEditor and editor controllers.
+ */
+async function saveWithHistory(ctxId, md) {
+  const ctx = await Store.getContext(ctxId);
+  if (ctx) historyMgr.push(ctxId, serialize(ctx));
+  await Store.replaceContextFromMarkdown(ctxId, md);
+}
 
 // =======================================================================
 //  Render orchestration
@@ -66,8 +128,9 @@ function selectedContext() {
 }
 
 async function onSelectContext(id) {
-  if (mode === "editor") await editor.flush();
+  if (mode === "editor") await editor.flush(saveWithHistory);
   if (mode === "vista-edit") await docEditor.flush();
+  findBar.dispose();
   selectedId = id;
   mode = "vista";
   renderRail(railList, contexts, selectedId, onSelectContext, onDeleteContext);
@@ -75,18 +138,25 @@ async function onSelectContext(id) {
 }
 
 async function onDeleteContext(id) {
-  if (mode === "editor" && selectedId === id) await editor.flush();
+  const ctx = contexts.find((c) => c.id === id);
+  const confirmed = await confirmDelete(ctx?.name ?? "este contexto");
+  if (!confirmed) return;
+
+  if (mode === "editor" && selectedId === id) await editor.flush(saveWithHistory);
   if (mode === "vista-edit" && selectedId === id) await docEditor.flush();
   editor.invalidate(id);
   docEditor.dispose();
+  findBar.dispose();
+  historyMgr.invalidate(id);
   await Store.deleteContext(id);
   if (selectedId === id) selectedId = null;
   await render();
 }
 
 async function onCreateContext() {
-  if (mode === "editor") await editor.flush();
+  if (mode === "editor") await editor.flush(saveWithHistory);
   if (mode === "vista-edit") await docEditor.flush();
+  findBar.dispose();
   const ctx = await Store.createContext("Nuevo contexto");
   selectedId = ctx.id;
   mode = "vista";
@@ -121,16 +191,23 @@ async function renderMain() {
   }
   renderHeader(ctx);
   if (mode === "editor") {
-    editor.mount(bodyEl, ctx, { onSync: afterEditorSync });
+    editor.mount(bodyEl, ctx, {
+      onSync: afterEditorSync,
+      onSave: saveWithHistory,
+    });
   } else if (mode === "vista-edit") {
     editor.dispose();
     await docEditor.mount(bodyEl, ctx, {
       onSync: afterDocEditorSync,
       onEscape: () => switchMode("vista"),
+      onSave: saveWithHistory,
+      onDirty: () => setUnsavedDot(true),
+      onClean: () => setUnsavedDot(false),
     });
   } else {
     editor.dispose();
     docEditor.dispose();
+    findBar.dispose();
     renderVista(bodyEl, ctx);
   }
 }
@@ -146,7 +223,7 @@ function renderHeader(ctx) {
   ctxHeader.hidden = false;
   ctxHeader.innerHTML = "";
 
-  // Row 1: color dot + name (dbl-click to rename) + .md download
+  // Row 1: color dot + name (dbl-click to rename) + unsaved dot + .md download
   const row1 = document.createElement("div");
   row1.className = "ctx-title-row";
   const dot = document.createElement("span");
@@ -157,6 +234,14 @@ function renderHeader(ctx) {
   name.textContent = ctx.name;
   name.title = "Doble clic para renombrar";
   name.addEventListener("dblclick", () => startRename(ctx, name));
+
+  // Unsaved indicator (visible only in vista-edit mode when dirty).
+  const unsavedDot = document.createElement("span");
+  unsavedDot.className = "unsaved-dot";
+  unsavedDot.textContent = "●";
+  unsavedDot.hidden = true;
+  unsavedDot.setAttribute("aria-label", "Cambios sin guardar");
+
   const mdBtn = document.createElement("button");
   mdBtn.className = "btn md ghost";
   mdBtn.title = "Descargar como Markdown";
@@ -166,25 +251,7 @@ function renderHeader(ctx) {
   mdBtn.append(makeMdMark(), dlIcon);
   mdBtn.addEventListener("click", () => downloadMd(ctx));
 
-  if (mode === "vista") {
-    const editBtn = document.createElement("button");
-    editBtn.className = "icon-btn";
-    editBtn.title = "Editar documento";
-    editBtn.setAttribute("aria-label", "Editar documento");
-    const pencilIcon = createElement(Pencil, { width: 14, height: 14 });
-    pencilIcon.style.pointerEvents = "none";
-    editBtn.appendChild(pencilIcon);
-    editBtn.addEventListener("click", () => switchMode("vista-edit"));
-    row1.append(dot, name, mdBtn, editBtn);
-  } else if (mode === "vista-edit") {
-    const doneBtn = document.createElement("button");
-    doneBtn.className = "btn ghost";
-    doneBtn.textContent = "Listo";
-    doneBtn.addEventListener("click", () => switchMode("vista"));
-    row1.append(dot, name, mdBtn, doneBtn);
-  } else {
-    row1.append(dot, name, mdBtn);
-  }
+  row1.append(dot, name, unsavedDot, mdBtn);
 
   // Row 2: counter + Vista/Editor segmented toggle
   const row2 = document.createElement("div");
@@ -203,6 +270,12 @@ function renderHeader(ctx) {
   ctxHeader.append(row1, row2);
 }
 
+/** Show/hide the .unsaved-dot in the current header (vista-edit only). */
+function setUnsavedDot(visible) {
+  const dot = ctxHeader.querySelector(".unsaved-dot");
+  if (dot) dot.hidden = !visible;
+}
+
 function segBtn(label, on, onClick) {
   const b = document.createElement("button");
   if (on) b.className = "on";
@@ -211,7 +284,6 @@ function segBtn(label, on, onClick) {
   return b;
 }
 
-/** Inline-rename the context from its title element. */
 async function startRename(ctx, nameEl) {
   const input = document.createElement("input");
   input.className = "search";
@@ -220,6 +292,9 @@ async function startRename(ctx, nameEl) {
   input.focus();
   input.select();
   const commit = async () => {
+    // Snapshot before renaming so it's undoable.
+    const current = await Store.getContext(ctx.id);
+    if (current) historyMgr.push(ctx.id, serialize(current));
     await Store.renameContext(ctx.id, input.value || ctx.name);
     editor.invalidate(ctx.id);
     await render();
@@ -231,7 +306,6 @@ async function startRename(ctx, nameEl) {
   });
 }
 
-/** Called after each debounced save from the inline doc editor — refreshes rail + counter. */
 async function afterDocEditorSync() {
   editor.invalidate(selectedId);
   contexts = await Store.listContexts();
@@ -247,17 +321,21 @@ async function afterDocEditorSync() {
 
 async function switchMode(next) {
   if (next === mode) return;
-  if (mode === "editor") await editor.flush();
+  if (mode === "editor") await editor.flush(saveWithHistory);
   if (mode === "vista-edit") {
     await docEditor.flush();
-    contexts = await Store.listContexts(); // refresh after save
+    contexts = await Store.listContexts();
   }
+  // Snapshot BEFORE entering Monaco so the full edit session is undoable.
+  if (next === "editor" && selectedId) {
+    const ctx = selectedContext();
+    if (ctx) historyMgr.push(selectedId, serialize(ctx));
+  }
+  findBar.dispose();
   mode = next;
   await renderMain();
 }
 
-/** After a live editor sync: refresh the rail + counter without resetting the
- *  editor (which would move the cursor). */
 async function afterEditorSync() {
   contexts = await Store.listContexts();
   const ctx = selectedContext();
@@ -271,10 +349,112 @@ async function afterEditorSync() {
 }
 
 // =======================================================================
+//  Global keyboard handler
+// =======================================================================
+
+function onGlobalKeydown(e) {
+  const mod = e.metaKey || e.ctrlKey;
+
+  // ── Undo / Redo ──────────────────────────────────────────────────────
+  if (mod && e.code === "KeyZ" && !e.altKey) {
+    // Let Monaco handle its own undo natively.
+    if (mode === "editor") return;
+    // Let the browser handle undo when a text field has focus.
+    const active = document.activeElement;
+    if (active && (
+      active.classList.contains("vista-edit-doc") ||
+      active.classList.contains("find-input") ||
+      active.classList.contains("replace-input") ||
+      active.classList.contains("search")
+    )) return;
+
+    e.preventDefault();
+    applyUndoRedo(e.shiftKey);
+    return;
+  }
+
+  // ── Format Document (Shift+Alt+F) ────────────────────────────────────
+  if (e.shiftKey && e.altKey && e.code === "KeyF") {
+    e.preventDefault();
+    applyFormat();
+    return;
+  }
+
+  // ── Find / Replace (Cmd+F / Ctrl+F) ──────────────────────────────────
+  if (mod && e.code === "KeyF" && !e.shiftKey && !e.altKey) {
+    // Monaco handles its own find natively — don't intercept.
+    if (mode === "editor") return;
+    if (mode === "vista-edit") {
+      e.preventDefault();
+      openFind();
+    }
+    // In vista (preview) mode: do nothing.
+    return;
+  }
+}
+
+// =======================================================================
+//  Undo / Redo
+// =======================================================================
+
+async function applyUndoRedo(isRedo) {
+  if (!selectedId) return;
+  const ctx = await Store.getContext(selectedId);
+  if (!ctx) return;
+
+  const current = serialize(ctx);
+  const snap = isRedo
+    ? historyMgr.redo(selectedId, current)
+    : historyMgr.undo(selectedId, current);
+
+  if (!snap) return; // stack empty
+
+  await restore(selectedId, snap);
+  await render();
+}
+
+// =======================================================================
+//  Format Document
+// =======================================================================
+
+async function applyFormat() {
+  const ctx = selectedContext();
+  if (!ctx) return;
+
+  if (mode === "vista-edit") {
+    const ta = bodyEl.querySelector(".vista-edit-doc");
+    if (!ta) return;
+    const parsed = Store.parseMd(ta.value);
+    const formatted = Store.buildMd({
+      name: parsed.name || ctx.name,
+      items: parsed.items,
+    });
+    if (formatted === ta.value) return;
+    ta.value = formatted;
+    ta.dispatchEvent(new Event("input")); // triggers auto-save
+  } else if (mode === "editor") {
+    editor.applyFormat(ctx);
+  }
+}
+
+// =======================================================================
+//  Find / Replace
+// =======================================================================
+
+function openFind() {
+  if (mode !== "vista-edit") return;
+  findBar.mount(bodyEl, () => bodyEl.querySelector(".vista-edit-doc"), {
+    onBeforeReplace: async () => {
+      const ctx = await Store.getContext(selectedId);
+      if (ctx) historyMgr.push(selectedId, serialize(ctx));
+    },
+  });
+}
+
+// =======================================================================
 //  Helpers
 // =======================================================================
 
-/** Canonical Markdown mark SVG badge (M with down-arrow in a rounded rect). */
 function makeMdMark() {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
@@ -299,13 +479,9 @@ function makeMdMark() {
   return svg;
 }
 
-// =======================================================================
-//  Export
-// =======================================================================
 function downloadMd(ctx) {
-  // Prefer the live in-flight buffer when editing, else the stored document.
   const liveDocMd = mode === "vista-edit"
-    ? document.querySelector(".vista-edit-doc")?.value
+    ? bodyEl.querySelector(".vista-edit-doc")?.value
     : null;
   const md = liveDocMd || (mode === "editor" && editor.peek(ctx.id)) || Store.buildMd(ctx);
   const blob = new Blob([md], { type: "text/markdown" });

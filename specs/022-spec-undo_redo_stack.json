@@ -1,0 +1,122 @@
+{
+  "id": 22,
+  "status": "approved",
+  "createdAt": "2026-06-29",
+  "author": "Spec-Writer (harness)",
+  "title": "VS Code editor experience: undo/redo, unsaved indicator, format, find/replace",
+  "description": "Conjunto de comandos de editor estilo VS Code para el panel lateral. (1) Pila de undo/redo en memoria con snapshots por contexto. (2) Indicador visual de cambios sin guardar (dot ● junto al nombre del contexto). (3) Formatear documento vía parseMd→buildMd (Shift+Alt+F). (4) Find/Replace: Cmd+F abre una barra de búsqueda flotante sobre el textarea (la vista-edit ya es el editor de texto principal); en modo Monaco el find panel nativo de Monaco se activa con el mismo atajo.",
+  "acceptance_criteria": [
+    "UNDO/REDO — Cmd+Z (macOS) / Ctrl+Z (Win/Linux) deshace el último cambio guardado en storage para el contexto seleccionado.",
+    "UNDO/REDO — Cmd+Shift+Z (macOS) / Ctrl+Shift+Z (Win/Linux) rehace el último undo.",
+    "UNDO/REDO — No se intercepta en mode === 'editor' (Monaco maneja su propio undo nativo).",
+    "UNDO/REDO — No se intercepta cuando el textarea .vista-edit-doc o el input de búsqueda .find-input tienen el foco.",
+    "UNDO/REDO — Capturas desde el content script (addItem) generan un punto de undo detectado vía chrome.storage.onChanged.",
+    "UNDO/REDO — Rename del contexto también es undoable.",
+    "UNDO/REDO — Historial en memoria (máx 50 past + 50 future por contexto); se invalida al eliminar el contexto.",
+    "UNSAVED — En mode 'editor' (Monaco): el dot ● aparece dentro del tab-bar del editor, en el span del nombre de archivo (e.g. 'Nuevo contexto.md ●'), cuando hay cambios sin guardar. Desaparece tras el flush.",
+    "UNSAVED — En mode 'vista-edit' (textarea): el dot ● aparece junto al nombre del contexto en el sidebar header (.unsaved-dot, justo después del ctx-name) cuando el debounce está en vuelo. Desaparece tras el save.",
+    "UNSAVED — El dot es siempre el mismo glyph ● (U+25CF), color var(--fg-muted), font-size 10px.",
+    "UNSAVED — En modo 'vista' (preview read-only) el dot nunca aparece.",
+    "FORMAT — Shift+Option+F (macOS) / Shift+Alt+F (Win/Linux) normaliza el Markdown del editor activo (textarea o Monaco) via parseMd → buildMd.",
+    "FORMAT — En el textarea: reemplaza el valor del textarea con el Markdown normalizado y dispara 'input' para que el auto-save recoja el cambio.",
+    "FORMAT — En Monaco: reemplaza el modelo con el Markdown normalizado (editor.setValue o pushEditOperations).",
+    "FORMAT — No cambia el significado del documento: el round-trip parseMd→buildMd es idempotente.",
+    "FIND — Cmd+F (macOS) / Ctrl+F (Win/Linux) en mode === 'vista-edit' abre una barra flotante (.find-bar) superpuesta sobre el textarea.",
+    "FIND — La barra muestra: input de búsqueda, resultado 'N de M', botones ‹ Anterior › Siguiente, botón toggle [±] para expandir Replace, botón ✕ cierre.",
+    "FIND — Resalta la coincidencia actual seleccionándola en el textarea (setSelectionRange) y haciendo scroll hasta ella.",
+    "FIND — Shift+Alt+F dentro de la barra o el botón [±] muestra/oculta un segundo input de Replace con botón 'Reemplazar' y 'Reemplazar todo'.",
+    "FIND — Escape cierra la barra y devuelve el foco al textarea.",
+    "FIND — En mode === 'editor' (Monaco): Cmd+F activa el find panel nativo de Monaco (ya funciona por defecto; no requiere código extra salvo asegurarse de no interceptar el evento).",
+    "FIND — En mode === 'vista' (preview): Cmd+F no hace nada (no hay texto editable).",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "dependencies": [18, 21],
+  "implementation_plan": {
+    "new_files": [
+      {
+        "path": "src/sidebar/history.js",
+        "description": "createHistoryManager(): { push, undo, redo, canUndo, canRedo, invalidate }. stacks[ctxId] = { past: string[], future: string[] }, MAX=50. Snapshot = JSON.stringify({ name, items })."
+      },
+      {
+        "path": "src/sidebar/find.js",
+        "description": "createFindBar(): { mount(mountEl, getTextarea), dispose() }. Renderiza la barra flotante .find-bar sobre el textarea, maneja búsqueda/navegación/reemplazo con setSelectionRange. Emite evento onReplace para que sidebar.js pueda hacer snapshot antes del replace."
+      }
+    ],
+    "modified_files": [
+      {
+        "path": "src/sidebar/vista.js",
+        "changes": [
+          "mount() acepta onSave(md) externo inyectado desde sidebar.js (en lugar de llamar Store.replaceContextFromMarkdown directamente).",
+          "mount() acepta onDirty() y onClean() callbacks para notificar el estado unsaved.",
+          "Los callbacks onDirty/onClean se llaman en los eventos 'input' y tras cada save exitoso."
+        ]
+      },
+      {
+        "path": "src/sidebar/editor.js",
+        "changes": [
+          "mount() acepta onSave(md) externo inyectado.",
+          "mount() acepta onDirty() y onClean(): onDirty se llama en onDidChangeModelContent (dirty en vuelo), onClean tras flush exitoso.",
+          "El tab-bar HTML cambia: el span del nombre pasa a tener class 'tab-title' y contiene el texto + un <span class='tab-dirty' hidden>●</span>. onDirty muestra el dot; onClean lo oculta.",
+          "mount() acepta onFormat() externo (opcional): reemplaza el valor del modelo Monaco con el Markdown normalizado."
+        ]
+      },
+      {
+        "path": "src/sidebar.js",
+        "changes": [
+          "Importar createHistoryManager, createFindBar.",
+          "Estado dirty: isDirty flag + renderDirtyDot(bool) actualiza/inserta el .unsaved-dot en el header.",
+          "saveWithHistory(ctxId, md): snapshot antes, Store.replaceContextFromMarkdown, setClean.",
+          "Pasar saveWithHistory como onSave a docEditor.mount() y editor.mount().",
+          "Pasar onDirty/onClean a ambos controladores.",
+          "startRename(): snapshot antes de Store.renameContext.",
+          "chrome.storage.onChanged: detectar addItem externo (newCtx.items.length > oldCtx.items.length) → push snapshot del estado anterior.",
+          "Listener keydown global: Cmd+Z→undo, Cmd+Shift+Z→redo, Shift+Alt+F→format, Cmd+F→find (con reglas de foco/modo).",
+          "applyUndoRedo(isRedo): snapshot del estado actual, llama undo/redo, restaura con writeAll, re-render.",
+          "applyFormat(): obtiene el MD del editor activo, parseMd→buildMd, lo pasa de vuelta al editor activo.",
+          "openFind(): monta el FindBar sobre el textarea del modo vista-edit.",
+          "En onDeleteContext: historyMgr.invalidate(id), findBar.dispose()."
+        ]
+      },
+      {
+        "path": "src/sidebar.css",
+        "changes": [
+          ".unsaved-dot: pequeño ● (font-size: 10px, color: var(--fg-muted), margin-left: 4px, vertical-align: middle).",
+          ".find-bar: posición absoluta sobre el textarea, top: 8px, right: 8px, background var(--bg-panel), border var(--border), border-radius 6px, padding 6px 8px, display flex, gap 6px, z-index 10.",
+          ".find-bar input.find-input, input.replace-input: pequeños (font-size 12px, padding 2px 6px).",
+          ".find-bar .find-count: muted, font-size 11px.",
+          ".find-bar button: icon-btn pequeño."
+        ]
+      }
+    ]
+  },
+  "keyboard_map": {
+    "undo":    ["Meta+Z (macOS)",         "Ctrl+Z (Win/Linux)"],
+    "redo":    ["Meta+Shift+Z (macOS)",   "Ctrl+Shift+Z (Win/Linux)"],
+    "format":  ["Meta+Shift+Alt+F (macOS — Shift+Option+F)", "Ctrl+Shift+Alt+F (Win/Linux — Shift+Alt+F)"],
+    "find":    ["Meta+F (macOS)",         "Ctrl+F (Win/Linux)"],
+    "find_next":  ["Enter (con find-bar abierta)"],
+    "find_prev":  ["Shift+Enter (con find-bar abierta)"],
+    "close_find": ["Escape (con find-bar abierta)"]
+  },
+  "unsaved_dot_position": {
+    "mode_editor": "Dentro del .tab-bar del Monaco editor, añadido al span del nombre de archivo: 'Nombre.md ●'. El span lleva class 'tab-title'; el dot es un <span class='tab-dirty'>●</span> que se muestra/oculta con display:none.",
+    "mode_vista_edit": "Después del .ctx-name en la primera fila del header del sidebar (.ctx-title-row): <span class='unsaved-dot'>●</span> insertado tras el nodo de nombre, inicialmente hidden."
+  },
+  "format_contract": "parseMd(currentMd) → buildMd({ name: parsed.name || ctx.name, items: parsed.items }). Idempotente: aplicar dos veces da el mismo resultado.",
+  "find_replace_notes": [
+    "Búsqueda case-insensitive por defecto (flag 'gi').",
+    "Replace hace snapshot en history antes de mutar el contenido del textarea.",
+    "Replace All hace un único snapshot antes de reemplazar todo.",
+    "El textarea se mantiene enfocado mientras la find-bar está abierta (no robar el foco al navegar matches).",
+    "En Monaco (mode === 'editor'), Cmd+F ya funciona nativamente — no interceptar ni montar find-bar."
+  ],
+  "out_of_scope": [
+    "Deshacer deleteContext (v2).",
+    "Deshacer createContext.",
+    "Persistir la pila de undo en chrome.storage.",
+    "Highlighting visual dentro del textarea (solo setSelectionRange — sin overlay).",
+    "Regex search en el find bar (solo string literal en v1).",
+    "Format en modo 'vista' (read-only — no hay texto editable)."
+  ]
+}

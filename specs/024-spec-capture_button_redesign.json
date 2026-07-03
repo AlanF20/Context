@@ -1,0 +1,133 @@
+{
+  "id": 24,
+  "status": "approved",
+  "createdAt": "2026-06-30",
+  "author": "Claude",
+  "title": "Toolbar de captura rápida por categoría",
+  "description": "El trigger actual de captura ('Guardar resaltado ＋') es un pill de texto que comunica solo una acción posible y no aprovecha el contexto de la página que la extensión ya detecta. Se reemplaza por un toolbar horizontal flotante — inspirado en el patrón de Medium (inline formatting toolbar) — que muestra los 4 swatches de categoría como acciones directas. Combinado con el smart-default de la Opción B: si hay un contexto detectado para esta página, hacer clic en un swatch guarda inmediatamente sin abrir popup. Si no hay contexto detectado, clic en un swatch abre el popup completo con esa categoría pre-seleccionada. Un botón '⋯' siempre abre el popup completo.",
+  "acceptance_criteria": [
+    "AC-01 [Trigger visual]: El elemento `.ch-icon` se reemplaza por `.ch-toolbar` — un pill horizontal con 4 botones de swatch de categoría (Título / Idea / Argumento / Evidencia) y un botón '⋯'. No hay texto 'Guardar resaltado' en el estado por defecto.",
+    "AC-02 [Swatches]: Cada swatch es un botón circular de 20×20 px cuyo fondo usa el color de la categoría correspondiente: Título → color del `.ch-hl-title` (rojo-rosa), Idea → `.ch-hl-idea` (dorado), Argumento → `.ch-hl-argument` (azul), Evidencia → `.ch-hl-evidence` (verde).",
+    "AC-03 [Accesibilidad]: Cada swatch tiene `aria-label='Guardar como [Categoría]'` y `title='[Categoría]'`. El botón '⋯' tiene `aria-label='Más opciones'`.",
+    "AC-04 [Estilo del toolbar]: `border-radius: 24px`, background `var(--bg)`, border `1px solid var(--border)`, box-shadow `0 4px 14px var(--shadow-lg)`. El toolbar tiene el mismo z-index máximo que el icon actual.",
+    "AC-05 [Aparición]: El toolbar aparece con una transición `opacity 0 → 1` de 120ms. Se posiciona usando la misma función `position()` del código actual (centrado sobre la selección, con fallback debajo si no hay espacio).",
+    "AC-06 [Carga del contexto async]: Al aparecer el toolbar, se lanza `Store.listContexts()` asíncronamente para evaluar `contextForThisPage()`. El toolbar se muestra inmediatamente sin bloquear; la carga de contexto ocurre en paralelo.",
+    "AC-07 [Indicador de contexto]: Cuando `contextForThisPage()` retorna un contexto, el toolbar añade un dot de color (el color del contexto, 8×8 px, `border-radius: 50%`) a la izquierda de los swatches, separado por un divisor vertical. El tooltip de cada swatch cambia a 'Guardar en [Nombre de contexto] como [Categoría]'.",
+    "AC-08 [Ruta rápida — clic con contexto detectado]: Si hay un contexto detectado, clic en un swatch llama a `Store.addItem(ctx.id, { text: savedText, category, sourceUrl, rangePrefix, rangeSuffix, linkedSubtitleId: null })` inmediatamente, sin abrir popup.",
+    "AC-09 [Estado de éxito]: Tras el guardado exitoso en la ruta rápida, el toolbar entra en estado 'éxito': el fondo cambia al color de la categoría guardada, aparece un '✓' y el texto 'Guardado' (fuente 12px, bold) durante 450ms, luego el toolbar se auto-elimina del DOM.",
+    "AC-10 [Resaltado en página tras ruta rápida]: Tras el guardado exitoso, se aplica el resaltado `.ch-hl ch-hl-[category]` en el rango seleccionado (misma lógica que `highlightSavedRange()` actual).",
+    "AC-11 [Ruta sin contexto — clic sin contexto detectado]: Si `contextForThisPage()` no encuentra contexto (o la carga aún no terminó), clic en un swatch cierra el toolbar y abre el popup completo con esa categoría pre-seleccionada en el select de categoría.",
+    "AC-12 [Botón ⋯]: El botón '⋯' siempre cierra el toolbar y abre el popup completo (`openPopup(rect)`), independientemente de si hay contexto detectado.",
+    "AC-13 [Cierre del toolbar]: El toolbar se elimina del DOM al: (a) scroll en la página, (b) `mousedown` fuera de `.ch-root`, (c) guardado exitoso, (d) apertura del popup. Idéntico al comportamiento de `removeIcon()` actual.",
+    "AC-14 [Teclado]: Tab navega los swatches y el botón '⋯' en orden. Enter sobre un elemento enfocado activa su acción. Escape cierra el toolbar sin guardar.",
+    "AC-15 [Reemplazo en content.js]: La función `showIcon()` se reemplaza por `showToolbar()`. `removeIcon()` → `removeToolbar()`. La variable `iconEl` → `toolbarEl`. Las referencias en `mousedown`, `scroll`, `teardown()` y `mouseup` se actualizan.",
+    "AC-16 [Reemplazo en content.css]: Las reglas `.ch-icon` y `.ch-icon:hover` se reemplazan por reglas para `.ch-toolbar`, `.ch-toolbar-swatch`, `.ch-toolbar-swatch:hover`, `.ch-toolbar-divider`, `.ch-toolbar-more`, `.ch-toolbar-ctx-dot`, `.ch-toolbar-success`.",
+    "AC-17 [Sin regresión en el popup]: El popup de captura completo (`openPopup()`) y todos sus sub-componentes (quote preview, combo, nest, acciones) siguen funcionando inalterados.",
+    "AC-18 [Señal de apertura del panel — content.js]: Tras el guardado exitoso en la ruta rápida (AC-08), el content script envía `chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id })` al background service worker.",
+    "AC-19 [Apertura del panel — background.js]: El background service worker maneja el mensaje `CH_OPEN_PANEL_CTX`: (a) llama a `chrome.sidePanel.open({ tabId: sender.tab.id })` y (b) escribe `chrome.storage.local.set({ CH_NAV: ctxId })`. Ambas operaciones ocurren en el mismo handler.",
+    "AC-20 [Navegación al abrir — sidebar.js (panel recién abierto)]: En `DOMContentLoaded`, el sidebar lee `chrome.storage.local.get('CH_NAV')`. Si existe un valor, lo usa como `selectedId` inicial (equivalente a seleccionar ese contexto en el rail) y elimina la clave (`chrome.storage.local.remove('CH_NAV')`) inmediatamente tras leerla.",
+    "AC-21 [Navegación en caliente — sidebar.js (panel ya abierto)]: En el listener `chrome.storage.onChanged`, si el área es `'local'` y `changes.CH_NAV` tiene `newValue`, el sidebar llama a `onSelectContext(changes.CH_NAV.newValue)` y elimina la clave. Este caso ocurre cuando el side panel ya estaba abierto en el momento del guardado.",
+    "AC-22 [Limpieza de CH_NAV]: La clave `CH_NAV` en `chrome.storage.local` se elimina siempre tras ser consumida por el sidebar. Si el sidebar no está abierto y el usuario no abre el panel en la misma sesión, la clave se ignora en la siguiente apertura (no navega a un contexto obsoleto de sesiones anteriores).",
+    "AC-23 [Build]: `pnpm run build` termina sin errores.",
+    "AC-24 [Harness]: `init.sh` pasa sin errores de sintaxis."
+  ],
+  "interaction_flows": {
+    "flow_A_fast_save": {
+      "label": "Ruta rápida — contexto detectado",
+      "steps": [
+        "Usuario selecciona texto en la página",
+        "mouseup → savedText guardado, rect calculado → showToolbar(rect)",
+        "Toolbar aparece (fade-in 120ms): [dot-ctx] | [Título] [Idea] [Argumento] [Evidencia] | [⋯]",
+        "Store.listContexts() resuelve → contextForThisPage() → dot del contexto animado (scale 0→1)",
+        "Usuario hace clic en [Idea]",
+        "Store.addItem(ctx.id, { category: 'idea', text, sourceUrl, rangePrefix, rangeSuffix })",
+        "highlightSavedRange('idea', savedItem.id)",
+        "chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id })",
+        "Background: chrome.sidePanel.open({ tabId }) + chrome.storage.local.set({ CH_NAV: ctxId })",
+        "Toolbar → estado éxito (fondo dorado, '✓ Guardado', 450ms) → removeToolbar()",
+        "Sidebar abre (o ya estaba abierto) → lee CH_NAV → onSelectContext(ctxId) → elimina CH_NAV"
+      ]
+    },
+    "flow_B_no_context": {
+      "label": "Ruta sin contexto — popup completo pre-categorizado",
+      "steps": [
+        "Usuario selecciona texto",
+        "Toolbar aparece sin dot de contexto (sin coincidencia en esta página)",
+        "Usuario hace clic en [Argumento]",
+        "removeToolbar() → openPopup(rect) con category='argument' pre-seleccionado en el select",
+        "Usuario elige/crea contexto en el combo → Enter guarda",
+        "Flujo normal del popup"
+      ]
+    },
+    "flow_C_full_popup": {
+      "label": "Ruta completa — botón ⋯",
+      "steps": [
+        "Usuario selecciona texto",
+        "Toolbar aparece",
+        "Usuario hace clic en [⋯]",
+        "removeToolbar() → openPopup(rect) con la categoría por defecto ('idea')",
+        "Flujo normal del popup"
+      ]
+    }
+  },
+  "design_spec": {
+    "toolbar_anatomy": {
+      "container": ".ch-toolbar — pill horizontal, border-radius 24px, padding 5px 10px, display flex, gap 6px, align-items center",
+      "ctx_dot": ".ch-toolbar-ctx-dot — círculo 8×8 px, border-radius 50%, hidden hasta que contextForThisPage() resuelve. Animación scale(0)→scale(1) 150ms ease-out",
+      "divider_after_dot": ".ch-toolbar-divider — 1px × 14px, background var(--border), visible solo cuando ctx-dot es visible",
+      "swatches": ".ch-toolbar-swatch × 4 — círculos 20×20 px, border-radius 50%, cursor pointer. :hover → scale(1.2) 100ms ease. :focus-visible → outline 2px offset 2px usando var(--accent)",
+      "divider_before_more": ".ch-toolbar-divider — igual al anterior, siempre visible",
+      "more_button": ".ch-toolbar-more — 22×22 px, border-radius 6px, background var(--surface-2), color var(--fg-3), font-size 13px, cursor pointer. :hover → background var(--surface-3)",
+      "success_overlay": ".ch-toolbar-success — reemplaza el contenido del toolbar en estado éxito: background animado → color de categoría, texto '✓ Guardado', border-radius 24px, transition 150ms"
+    },
+    "swatch_colors": {
+      "title": { "background": "#f6b8c4", "border": "#e8a0b0" },
+      "idea": { "background": "#fdeaa8", "border": "#e5cc78" },
+      "argument": { "background": "#bcd3f5", "border": "#8ab4e8" },
+      "evidence": { "background": "#bfe6c8", "border": "#8ecfa0" }
+    },
+    "tokens_used": ["--bg", "--surface-2", "--surface-3", "--border", "--fg-3", "--shadow-lg", "--accent"]
+  },
+  "files_changed": [
+    {
+      "path": "vite-extension/src/content.js",
+      "changes": [
+        "showIcon() → showToolbar(): genera el markup del toolbar con 4 swatches + botón ⋯; llama a Store.listContexts() async para detectar contexto",
+        "removeIcon() → removeToolbar(): misma lógica de remoción del DOM",
+        "Variable iconEl → toolbarEl",
+        "mouseup handler: llama a showToolbar() en lugar de showIcon()",
+        "mousedown, scroll, teardown(): usan removeToolbar()",
+        "openPopup(): acepta un parámetro opcional `initialCategory` (default 'idea') para pre-seleccionar la categoría cuando se abre desde el toolbar",
+        "Tras el guardado exitoso en la ruta rápida: chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id })"
+      ]
+    },
+    {
+      "path": "vite-extension/src/content.css",
+      "changes": [
+        "Reemplazar reglas .ch-icon y .ch-icon:hover",
+        "Añadir: .ch-toolbar, .ch-toolbar-swatch, .ch-toolbar-swatch:hover, .ch-toolbar-swatch:focus-visible, .ch-toolbar-divider, .ch-toolbar-ctx-dot, .ch-toolbar-ctx-dot.visible, .ch-toolbar-more, .ch-toolbar-more:hover, .ch-toolbar-success"
+      ]
+    },
+    {
+      "path": "vite-extension/src/background.js",
+      "changes": [
+        "Añadir handler chrome.runtime.onMessage para el mensaje 'CH_OPEN_PANEL_CTX': llama a chrome.sidePanel.open({ tabId: sender.tab.id }) y chrome.storage.local.set({ CH_NAV: ctxId })"
+      ]
+    },
+    {
+      "path": "vite-extension/src/sidebar.js",
+      "changes": [
+        "En DOMContentLoaded (render()): leer chrome.storage.local.get('CH_NAV') → si existe, usar como selectedId inicial → chrome.storage.local.remove('CH_NAV')",
+        "En chrome.storage.onChanged: detectar cambios en 'CH_NAV' → llamar onSelectContext(newValue) → chrome.storage.local.remove('CH_NAV')"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "out_of_scope": [
+    "Cambios al popup completo (openPopup) más allá del parámetro initialCategory",
+    "Apertura automática del sidebar tras guardar desde el popup (flujos B y C) — solo aplica a la ruta rápida (flujo A)",
+    "Tooltips custom (se usa el atributo title nativo del browser)",
+    "Integración con nest selector en la ruta rápida (linkedSubtitleId siempre null en fast-save)",
+    "Limpieza de CH_NAV por TTL — se confía en que el sidebar siempre consume y elimina el valor al abrirse"
+  ]
+}

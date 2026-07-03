@@ -404,6 +404,121 @@ body {
 .vista-md-preview .md-cat-item.cat-evidence { border-left-color: var(--cat-evidence-border); }
 .vista-md-preview .md-cat-item p { margin: 0; }
 
+/* ===== Unsaved indicator (vista-edit header) ===== */
+.unsaved-dot {
+  font-size: 10px;
+  color: var(--fg-3);
+  margin-left: 2px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ===== Find / Replace bar ===== */
+#body { position: relative; }
+.find-bar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  box-shadow: 0 3px 10px var(--shadow-lg);
+  min-width: 280px;
+}
+.find-bar .find-row,
+.find-bar .replace-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.find-bar .find-input,
+.find-bar .replace-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.find-bar .find-input:focus,
+.find-bar .replace-input:focus { outline: none; border-color: var(--accent-border); }
+.find-bar .find-count {
+  font-size: 11px;
+  color: var(--fg-3);
+  font-family: var(--mono);
+  white-space: nowrap;
+  min-width: 72px;
+  text-align: right;
+}
+.find-bar .icon-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.find-action-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-3);
+  color: var(--fg);
+  font-family: var(--ui);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.find-action-btn:hover { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+/* ===== Monaco tab dirty indicator ===== */
+.tab-dirty {
+  font-size: 10px;
+  color: #a0a0aa;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* ===== Confirmation modal ===== */
+#confirm-delete-modal {
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  padding: 20px 20px 16px;
+  width: 260px;
+  box-shadow: 0 8px 28px var(--shadow-lg);
+}
+#confirm-delete-modal::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+.modal-question {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--fg);
+}
+.modal-ctx-name {
+  font-weight: 700;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn.danger {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
+}
+.btn.danger:hover { filter: brightness(1.1); }
+
 /* ===== Vista — inline full-document editor ===== */
 .vista-edit-doc {
   flex: 1 1 auto;

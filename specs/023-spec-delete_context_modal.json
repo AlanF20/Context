@@ -1,0 +1,39 @@
+{
+  "id": 23,
+  "status": "approved",
+  "createdAt": "2026-06-29",
+  "author": "harness",
+  "title": "Modal de confirmación al eliminar un contexto",
+  "description": "Actualmente el botón X del rail elimina el contexto de forma inmediata e irreversible sin ningún aviso al usuario. Esta feature añade un modal de confirmación usando el elemento nativo HTML <dialog> que aparece antes de ejecutar la eliminación, mostrando el nombre del contexto afectado y dos botones: Cancelar (foco inicial, acción segura) y Eliminar (acción destructiva). El modal es accesible (focus-trap nativo, Escape = cancelar) y respeta los tokens de diseño del panel (claro/oscuro).",
+  "acceptance_criteria": [
+    "Al hacer clic en el botón X de un chip del rail, se abre el modal de confirmación en lugar de eliminar directamente.",
+    "El modal muestra el texto '¿Eliminar «[nombre del contexto]»?' con el nombre real del contexto.",
+    "El modal tiene dos botones: 'Cancelar' y 'Eliminar'. El foco inicial recae en 'Cancelar'.",
+    "Hacer clic en 'Cancelar' o pulsar Escape cierra el modal sin eliminar el contexto.",
+    "Hacer clic en 'Eliminar' cierra el modal y ejecuta la eliminación (comportamiento existente de onDeleteContext).",
+    "El modal usa el elemento <dialog> nativo con showModal(); no se usa window.confirm() ni un div overlay.",
+    "Los estilos usan los tokens CSS del panel (--bg, --fg, --border, --accent, --shadow-lg) y funcionan correctamente en modo claro y oscuro.",
+    "El módulo modal.js exporta confirmDelete(ctxName): Promise<boolean> e importa el elemento del DOM de sidebar.html.",
+    "sidebar.js importa confirmDelete desde sidebar/modal.js y lo await antes de llamar a Store.deleteContext.",
+    "rail.js no recibe cambios.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "dependencies": [],
+  "implementation_notes": {
+    "new_files": [
+      "vite-extension/src/sidebar/modal.js"
+    ],
+    "modified_files": [
+      "vite-extension/src/sidebar.html",
+      "vite-extension/src/sidebar.css",
+      "vite-extension/src/sidebar.js"
+    ],
+    "unchanged_files": [
+      "vite-extension/src/sidebar/rail.js",
+      "vite-extension/src/storage.js"
+    ],
+    "modal_html_snippet": "<dialog id='confirm-delete-modal' aria-modal='true'><p class='modal-question'>¿Eliminar <strong class='modal-ctx-name'></strong>?</p><div class='modal-actions'><button class='btn ghost modal-cancel'>Cancelar</button><button class='btn modal-confirm danger'>Eliminar</button></div></dialog>",
+    "modal_js_contract": "export function confirmDelete(ctxName): Promise<boolean> — rellena .modal-ctx-name, llama dialog.showModal(), resuelve true en Eliminar, false en Cancelar/close"
+  }
+}

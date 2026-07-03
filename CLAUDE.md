@@ -128,22 +128,26 @@ flujo es obligatorio y no tiene atajos.
 2. **Leer `progress/current.md`** — entender el estado que dejó la sesión anterior.
 3. **Añadir la feature a `feature_list.json`** con `status: "in_progress"` y
    `spec_path: null` antes de escribir nada más.
-4. **Researcher** — investigar y escribir el output a
+4. **Interviewer** — formular al usuario entre 3 y 5 preguntas de clarificación
+   sobre alcance, comportamiento esperado y casos límite de la feature. Las
+   respuestas quedan en el chat (sin archivo); el Researcher las usa como contexto
+   adicional. Excepción explícita a la regla "todo output va a disco".
+5. **Researcher** — investigar y escribir el output a
    `docs/research_<feature>.md`. Todo output va a disco; nada se pasa por chat.
-5. **Spec-Writer** — redactar la spec en `specs/NNN-spec-<feature>.json`
+6. **Spec-Writer** — redactar la spec en `specs/NNN-spec-<feature>.json`
    (NNN = feature ID con zero-padding a 3 dígitos) y presentarla al usuario para
    aprobación. El JSON debe tener los campos `id`, `status`, `createdAt`, `author`,
    `title`, `description`, `acceptance_criteria` y `dependencies`; `status` inicial
    es `"draft"`, pasa a `"approved"` tras el gate humano.
-6. **⛔ STOP — esperar aprobación humana.** No escribir ningún archivo en
+7. **⛔ STOP — esperar aprobación humana.** No escribir ningún archivo en
    `vite-extension/` hasta que el usuario diga "sí" (o equivalente). Este es el
    gate más importante: violarlo es el error más grave del pipeline.
-7. **Tester** — escribir el plan de verificación en `docs/test_<feature>.md`.
-8. **Implementer** — editar los archivos en `vite-extension/src/` según la spec
+8. **Tester** — escribir el plan de verificación en `docs/test_<feature>.md`.
+9. **Implementer** — editar los archivos en `vite-extension/src/` según la spec
    aprobada. No tocar `outputs/` (legado congelado).
-9. **Reviewer** — correr `./init.sh` + `pnpm run build` dentro de
-   `vite-extension/`; todos los checks deben salir verdes.
-10. **Cerrar sesión** — copiar `progress/current.md` a `progress/history.md`,
+10. **Reviewer** — correr `./init.sh` + `pnpm run build` dentro de
+    `vite-extension/`; todos los checks deben salir verdes.
+11. **Cerrar sesión** — copiar `progress/current.md` a `progress/history.md`,
     resetear `current.md` a la plantilla base, marcar la feature como `done` en
     `feature_list.json`.
 
@@ -152,7 +156,7 @@ flujo es obligatorio y no tiene atajos.
 - **Una feature a la vez.** Nunca mezclar cambios de features distintas.
 - **Todo output de agente va a disco.** Los agentes escriben archivos; el
   orquestador solo recibe referencias a esos archivos.
-- **Ningún edit a `vite-extension/` antes del paso 6.** Ni siquiera "un cambio
+- **Ningún edit a `vite-extension/` antes del paso 7.** Ni siquiera "un cambio
   pequeño obvio". Espera la aprobación.
 - **`outputs/` es legado congelado.** Nunca editar `outputs/` para features nuevas.
 - **Si `init.sh` falla en cualquier momento, parar.** Loguear el bloqueo y

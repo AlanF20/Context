@@ -21,9 +21,17 @@
 import * as Store from './content-storage.js';
 
 let savedText = "";
+let savedRawText = "";
 let savedRange = null;
-let iconEl = null;
+let toolbarEl = null;
 let popEl = null;
+
+const CAT_LABELS = {
+  title: 'Título',
+  idea: 'Idea',
+  argument: 'Argumento',
+  evidence: 'Evidencia',
+};
 
 // ----- list → Markdown conversion -----
 
@@ -119,11 +127,12 @@ document.addEventListener("mouseup", (e) => {
       const range = sel.rangeCount ? sel.getRangeAt(0) : null;
       const mdText = range ? fragmentToMarkdown(range.cloneContents()) : null;
       savedText = mdText !== null ? mdText : text;
+      savedRawText = text; // always the plain DOM text — used for re-anchoring on reload
       savedRange = range ? range.cloneRange() : null;
       const rect = getRect(sel);
-      if (rect) showIcon(rect);
+      if (rect) showToolbar(rect);
     } else {
-      removeIcon();
+      removeToolbar();
       removePopup();
     }
   }, 0);
@@ -132,12 +141,13 @@ document.addEventListener("mouseup", (e) => {
 document.addEventListener("mousedown", (e) => {
   if (isOwnUi(e.target)) return;
   removePopup();
+  removeToolbar();
 });
 
 window.addEventListener(
   "scroll",
   () => {
-    removeIcon();
+    removeToolbar();
     removePopup();
   },
   true
@@ -173,26 +183,127 @@ function getRect(sel) {
   return r && (r.width || r.height) ? r : null;
 }
 
-// ----- micro-icon -----
-function showIcon(rect) {
-  removeIcon();
+// ----- quick-capture toolbar -----
+function showToolbar(rect) {
+  removeToolbar();
   removePopup();
-  iconEl = document.createElement("div");
-  iconEl.className = "ch-root ch-icon";
-  iconEl.title = "Guardar resaltado";
-  iconEl.textContent = "Guardar resaltado ＋";
-  position(iconEl, rect);
-  document.body.appendChild(iconEl);
-  iconEl.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    removeIcon();
-    openPopup(rect);
+
+  toolbarEl = document.createElement('div');
+  toolbarEl.className = 'ch-root ch-toolbar';
+
+  const ctxDot = document.createElement('span');
+  ctxDot.className = 'ch-toolbar-ctx-dot';
+  ctxDot.hidden = true;
+
+  const ctxDivider = document.createElement('span');
+  ctxDivider.className = 'ch-toolbar-divider';
+  ctxDivider.hidden = true;
+
+  toolbarEl.appendChild(ctxDot);
+  toolbarEl.appendChild(ctxDivider);
+
+  const swatchEls = {};
+  for (const cat of ['title', 'idea', 'argument', 'evidence']) {
+    const btn = document.createElement('button');
+    btn.className = 'ch-toolbar-swatch';
+    btn.type = 'button';
+    btn.dataset.cat = cat;
+    btn.setAttribute('aria-label', `Guardar como ${CAT_LABELS[cat]}`);
+    btn.title = CAT_LABELS[cat];
+    toolbarEl.appendChild(btn);
+    swatchEls[cat] = btn;
+  }
+
+  const mainDivider = document.createElement('span');
+  mainDivider.className = 'ch-toolbar-divider';
+  toolbarEl.appendChild(mainDivider);
+
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'ch-toolbar-more';
+  moreBtn.type = 'button';
+  moreBtn.textContent = '⋯';
+  moreBtn.setAttribute('aria-label', 'Más opciones');
+  moreBtn.title = 'Más opciones';
+  toolbarEl.appendChild(moreBtn);
+
+  position(toolbarEl, rect);
+  document.body.appendChild(toolbarEl);
+
+  let detectedCtx = null;
+  Store.listContexts().then((contexts) => {
+    detectedCtx = contextForThisPage(contexts);
+    if (!detectedCtx || !toolbarEl) return;
+    ctxDot.style.background = detectedCtx.color;
+    ctxDot.hidden = false;
+    ctxDivider.hidden = false;
+    for (const [cat, btn] of Object.entries(swatchEls)) {
+      const label = `Guardar en ${detectedCtx.name} como ${CAT_LABELS[cat]}`;
+      btn.setAttribute('aria-label', label);
+      btn.title = label;
+    }
+  });
+
+  toolbarEl.addEventListener('mousedown', (e) => e.stopPropagation());
+  toolbarEl.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const swatch = e.target.closest('.ch-toolbar-swatch');
+    if (swatch) {
+      const category = swatch.dataset.cat;
+      if (detectedCtx) {
+        await fastSave(detectedCtx, category);
+      } else {
+        removeToolbar();
+        openPopup(rect, category);
+      }
+      return;
+    }
+    if (e.target.closest('.ch-toolbar-more')) {
+      removeToolbar();
+      openPopup(rect);
+    }
+  });
+
+  toolbarEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      removeToolbar();
+    }
   });
 }
 
-function removeIcon() {
-  if (iconEl && iconEl.parentNode) iconEl.parentNode.removeChild(iconEl);
-  iconEl = null;
+/** Save directly to detected context without opening the popup. */
+async function fastSave(ctx, category) {
+  try {
+    const { rangePrefix, rangeSuffix } = extractRangeContext(savedRange);
+    const savedItem = await Store.addItem(ctx.id, {
+      text: savedText,
+      category,
+      linkedSubtitleId: null,
+      sourceUrl: location.href,
+      rangePrefix,
+      rangeSuffix,
+      rangeText: savedRawText !== savedText ? savedRawText : null,
+    });
+    highlightSavedRange(category, savedItem.id);
+    chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id });
+    showToolbarSuccess(category);
+  } catch (err) {
+    console.error('[CH] fast-save error:', err);
+    removeToolbar();
+  }
+}
+
+function showToolbarSuccess(category) {
+  if (!toolbarEl) return;
+  toolbarEl.classList.add('ch-toolbar-success');
+  toolbarEl.dataset.successCat = category;
+  toolbarEl.innerHTML = '<span class="ch-toolbar-success-text">✓ Guardado</span>';
+  setTimeout(removeToolbar, 450);
+}
+
+function removeToolbar() {
+  if (toolbarEl && toolbarEl.parentNode) toolbarEl.parentNode.removeChild(toolbarEl);
+  toolbarEl = null;
 }
 
 const TRUNCATE_AT = 150;
@@ -256,7 +367,7 @@ function popupSkeleton() {
 }
 
 // ----- capture popup -----
-async function openPopup(rect) {
+async function openPopup(rect, initialCategory = 'idea') {
   removePopup();
   const contexts = await Store.listContexts();
 
@@ -286,7 +397,7 @@ async function openPopup(rect) {
     quoteToggle: popEl.querySelector('[data-role="quote-toggle"]'),
   };
 
-  let category = "idea";
+  let category = initialCategory;
   let quoteExpanded = false;
   let selectedCtx = contextForThisPage(contexts);
 
@@ -470,6 +581,7 @@ async function openPopup(rect) {
         sourceUrl: location.href,
         rangePrefix,
         rangeSuffix,
+        rangeText: savedRawText !== savedText ? savedRawText : null,
       });
       highlightSavedRange(category, savedItem.id);
       showStatus(els.status, "Guardado ✓", false);
@@ -492,7 +604,7 @@ function removePopup() {
 
 function teardown() {
   removePopup();
-  removeIcon();
+  removeToolbar();
 }
 
 function showStatus(el, msg, isError) {
@@ -526,9 +638,16 @@ function extractRangeContext(range) {
   }
 }
 
+// Separator used between text nodes in the concatenated index string.
+// \x00 never appears in real page text, so any indexOf match that spans
+// this character must cross a node boundary and is unsafe to highlight.
+const SEP = '\x00';
+
 /**
  * Collect visible text nodes under root (excluding .ch-hl children)
  * with their cumulative character offsets.
+ * Nodes are logically separated by SEP in the fullText string, so offsets
+ * account for +1 per node boundary.
  */
 function buildTextIndex(root) {
   const nodes = [];
@@ -542,7 +661,7 @@ function buildTextIndex(root) {
   let node;
   while ((node = walker.nextNode())) {
     nodes.push({ node, start: offset });
-    offset += node.textContent.length;
+    offset += node.textContent.length + 1; // +1 for SEP after each node
   }
   return nodes;
 }
@@ -571,20 +690,28 @@ function findRangeForItem(item, textNodes, fullText) {
   if (prefix || suffix) {
     const idx = fullText.indexOf(prefix + exact + suffix);
     if (idx !== -1) {
-      const s = posToNodeOffset(textNodes, idx + prefix.length);
-      const e = posToNodeOffset(textNodes, idx + prefix.length + exact.length);
-      if (s && e) {
-        const r = document.createRange();
-        r.setStart(s.node, s.offset);
-        r.setEnd(e.node, e.offset);
-        return r;
+      const exactStart = idx + prefix.length;
+      // If the exact portion contains SEP it crosses a node boundary — skip.
+      if (!fullText.slice(exactStart, exactStart + exact.length).includes(SEP)) {
+        const s = posToNodeOffset(textNodes, exactStart);
+        const e = posToNodeOffset(textNodes, exactStart + exact.length);
+        if (s && e) {
+          const r = document.createRange();
+          r.setStart(s.node, s.offset);
+          r.setEnd(e.node, e.offset);
+          return r;
+        }
       }
     }
   }
 
   // Fallback: unique exact match
   const firstIdx = fullText.indexOf(exact);
-  if (firstIdx !== -1 && fullText.indexOf(exact, firstIdx + 1) === -1) {
+  if (
+    firstIdx !== -1 &&
+    !fullText.slice(firstIdx, firstIdx + exact.length).includes(SEP) &&
+    fullText.indexOf(exact, firstIdx + 1) === -1
+  ) {
     const s = posToNodeOffset(textNodes, firstIdx);
     const e = posToNodeOffset(textNodes, firstIdx + exact.length);
     if (s && e) {
@@ -630,8 +757,16 @@ async function reapplyHighlights() {
     for (const item of candidates) {
       // Rebuild text index after each mark insertion to keep positions accurate.
       const textNodes = buildTextIndex(document.body);
-      const range = findRangeForItem(item, textNodes, textNodes.map(n => n.node.textContent).join(''));
-      if (range) applyMark(range, item.category, item.id);
+      const fullText = textNodes.map(n => n.node.textContent).join(SEP);
+      // List captures store Markdown in item.text; item.rangeText has the raw DOM text.
+      const searchItem = item.rangeText ? { ...item, text: item.rangeText } : item;
+      const range = findRangeForItem(searchItem, textNodes, fullText);
+      if (range) {
+        applyMark(range, item.category, item.id);
+        // Merge empty/fragmented text nodes left by extractContents() so the
+        // next iteration's buildTextIndex sees a clean, stable node structure.
+        document.body.normalize();
+      }
     }
   } catch (err) {
     console.warn('[CH] reapplyHighlights error:', err);

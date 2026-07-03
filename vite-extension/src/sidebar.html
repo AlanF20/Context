@@ -22,6 +22,16 @@
       </section>
     </div>
 
+    <dialog id="confirm-delete-modal" aria-modal="true" aria-labelledby="modal-question">
+      <p id="modal-question" class="modal-question">
+        ¿Eliminar <strong class="modal-ctx-name"></strong>?
+      </p>
+      <div class="modal-actions">
+        <button class="btn ghost modal-cancel">Cancelar</button>
+        <button class="btn danger modal-confirm">Eliminar</button>
+      </div>
+    </dialog>
+
     <!-- Monaco AMD loader must run as a classic script before the ES module.
          MV3 forbids remote code; Monaco is vendored in public/vendor/.
          marked and DOMPurify are npm packages bundled by Vite (no classic scripts needed). -->

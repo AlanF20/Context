@@ -310,7 +310,7 @@
         "pnpm run build termina sin errores.",
         "init.sh pasa sin errores de sintaxis."
       ],
-      "spec_path": null,
+      "spec_path": "specs/020-spec-markdown_preview_category_borders.json",
       "dependencies": [18],
       "status": "done"
     },
@@ -332,6 +332,83 @@
       "spec_path": "specs/019-spec-list_structure_capture.json",
       "dependencies": [],
       "status": "done"
+    },
+    {
+      "id": 21,
+      "name": "editor_save_keybinding",
+      "title": "Eliminar botón Editar del header y guardar desde el editor con Cmd+S",
+      "description": "El botón 'Editar' junto al botón de descarga .md en el header de la Vista es redundante porque la edición puede hacerse directamente en el textarea del preview o en el editor Monaco. Se elimina ese botón del header. Además, se añade el atajo Cmd+S (Mac) / Ctrl+S (Windows/Linux) en el modo de edición del textarea del preview para guardar explícitamente (además del auto-save con debounce ya existente).",
+      "acceptance_criteria": [
+        "El botón de lápiz ('Editar') ya NO aparece en el header de la Vista ni en ningún modo del panel.",
+        "El header en modo 'vista' muestra solo: dot de color + nombre del contexto + botón de descarga .md.",
+        "En el editor Monaco (pestaña 'Editor'), Cmd+S (macOS) / Ctrl+S (Win/Linux) guarda el documento inmediatamente.",
+        "La importación de Pencil (Lucide) se elimina de sidebar.js.",
+        "pnpm run build termina sin errores.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/021-spec-editor_save_keybinding.json",
+      "dependencies": [18],
+      "status": "done"
+    },
+    {
+      "id": 22,
+      "name": "vscode_editor_experience",
+      "title": "VS Code editor experience: undo/redo, unsaved indicator, format, find/replace",
+      "description": "Conjunto de comandos de editor estilo VS Code para el panel lateral: (1) pila de undo/redo en memoria (Cmd+Z/Cmd+Shift+Z) con snapshots por contexto antes de cada escritura a storage; (2) dot ● de 'unsaved' junto al nombre del contexto cuando hay cambios en vuelo; (3) Format document vía parseMd→buildMd (Shift+Alt+F); (4) Find/Replace flotante sobre el textarea en modo vista-edit (Cmd+F). Monaco conserva su undo y find nativos.",
+      "acceptance_criteria": [
+        "Cmd+Z / Ctrl+Z deshace el último cambio en storage; Cmd+Shift+Z / Ctrl+Shift+Z rehace.",
+        "No se intercepta en mode 'editor' (Monaco nativo) ni cuando el textarea o find-input tienen foco.",
+        "Dot ● aparece junto al nombre del contexto cuando hay cambios sin guardar; desaparece tras el save.",
+        "Shift+Option+F (Mac) / Shift+Alt+F (Win) normaliza el Markdown vía parseMd→buildMd en textarea y Monaco.",
+        "Cmd+F / Ctrl+F abre una barra flotante de find/replace sobre el textarea en modo vista-edit.",
+        "En Monaco, Cmd+F activa el panel nativo (no se intercepta).",
+        "pnpm run build termina sin errores.",
+        "init.sh pasa sin errores de sintaxis."
+      ],
+      "spec_path": "specs/022-spec-undo_redo_stack.json",
+      "dependencies": [18, 21],
+      "status": "done"
+    },
+    {
+      "id": 23,
+      "name": "delete_context_modal",
+      "title": "Modal de confirmación al eliminar un contexto",
+      "description": "Actualmente el botón X del rail elimina el contexto inmediatamente sin ningún aviso. Añadir un modal de confirmación que aparezca antes de ejecutar la eliminación, mostrando el nombre del contexto afectado y botones Cancelar / Eliminar.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/023-spec-delete_context_modal.json",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 24,
+      "name": "capture_button_redesign",
+      "title": "Rediseño del botón de captura de resaltado",
+      "description": "Reemplazar el trigger '.ch-icon' (pill de texto 'Guardar resaltado +') por un toolbar horizontal flotante de swatches de categoría, combinando el patrón de inline toolbar de Medium con la lógica de smart default de la Opción B. Si hay contexto detectado para la página (contextForThisPage()), clic en un swatch guarda inmediatamente. Si no, abre el popup completo con esa categoría pre-seleccionada. El botón ⋯ siempre abre el popup completo.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/024-spec-capture_button_redesign.json",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 25,
+      "name": "highlight_persistence_border_fix",
+      "title": "Fix: bordes fantasma en re-aplicación de resaltados al recargar",
+      "description": "Al recargar la página, los resaltados re-aplicados muestran de forma intermitente bordes de color por encima y por debajo del texto resaltado. El bug es no determinista: a veces funciona bien, a veces aparecen artefactos visuales. Investigar la causa raíz en la lógica de re-aplicación de rangos y corregirla.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/025-spec-highlight_persistence_border_fix.json",
+      "dependencies": [4],
+      "status": "done"
+    }
+  ],
+    {
+      "id": 26,
+      "name": "rehighlight_button",
+      "title": "Botón para re-aplicar resaltados en la página actual",
+      "description": "Botón que fuerza la re-aplicación de los resaltados guardados en la página actualmente abierta, útil cuando el usuario navega o recarga y quiere restaurar los highlights sin recargar la página completa.",
+      "acceptance_criteria": [],
+      "spec_path": null,
+      "dependencies": [4, 25],
+      "status": "in_progress"
     }
   ],
   "evaluations": [

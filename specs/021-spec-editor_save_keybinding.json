@@ -1,0 +1,20 @@
+{
+  "id": 21,
+  "status": "approved",
+  "createdAt": "2026-06-29",
+  "author": "Claude Sonnet 4.6",
+  "title": "Eliminar botón Editar del header y guardar desde el editor con Cmd+S",
+  "description": "El botón de lápiz ('Editar') que aparece junto al botón de descarga .md en el header de la Vista es redundante: la edición del documento completo la cubre el Editor Monaco (pestaña 'Editor'). Se elimina ese botón para simplificar el header. Además, se añade el atajo Cmd+S (Mac) / Ctrl+S (Win/Linux) en el editor Monaco para un guardado explícito que evita esperar el debounce.",
+  "acceptance_criteria": [
+    "El botón de lápiz ('Editar') ya NO aparece en el header de la Vista ni en ningún modo del panel.",
+    "El header en modo 'vista' muestra solo: dot de color + nombre del contexto + botón de descarga .md.",
+    "El header en modo 'editor' permanece igual (dot + nombre + botón .md, sin botón extra).",
+    "En el editor Monaco (pestaña 'Editor'), Cmd+S (macOS) / Ctrl+S (Win/Linux) guarda el documento inmediatamente (sin esperar el debounce de 350 ms).",
+    "El atajo Cmd+S usa monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS para ser multiplataforma.",
+    "El guardado con Cmd+S no causa errores visibles ni bloquea el editor.",
+    "La importación de Pencil (Lucide) se elimina de sidebar.js.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "dependencies": [18]
+}

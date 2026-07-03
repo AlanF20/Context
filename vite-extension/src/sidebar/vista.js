@@ -8,6 +8,14 @@
  *  createDocEditor()
  *    Returns a controller { mount, flush, dispose } that replaces the body with
  *    a full-document <textarea> editor (debounced auto-save, Escape to exit).
+ *
+ *  mount() options:
+ *    onSync()        — called after each successful save (refresh rail/counter).
+ *    onEscape()      — called when the user presses Escape.
+ *    onSave(id, md)  — async; replaces the direct Store.replaceContextFromMarkdown
+ *                      call so sidebar.js can inject history snapshotting.
+ *    onDirty()       — called on the first 'input' event (debounce in flight).
+ *    onClean()       — called after each successful save.
  */
 import { createElement, NotebookPen } from "lucide";
 import { Store } from "./store.js";
@@ -53,17 +61,26 @@ export function createDocEditor() {
   let syncTimer = null;
   let currentCtxId = null;
   let taRef = null;
+  let onSaveRef = null;
+  let onCleanRef = null;
 
-  async function save(value, onSync) {
+  async function save(value, { onSync, onClean } = {}) {
     if (!currentCtxId) return;
-    await Store.replaceContextFromMarkdown(currentCtxId, value);
+    if (onSaveRef) {
+      await onSaveRef(currentCtxId, value);
+    } else {
+      await Store.replaceContextFromMarkdown(currentCtxId, value);
+    }
     if (onSync) onSync();
+    if (onClean) onClean();
+    if (onCleanRef) onCleanRef();
   }
 
-  /** Replace mountEl body with a <textarea> pre-filled with the context Markdown. */
-  async function mount(mountEl, ctx, { onSync, onEscape } = {}) {
+  async function mount(mountEl, ctx, { onSync, onEscape, onSave, onDirty, onClean } = {}) {
     dispose();
     currentCtxId = ctx.id;
+    onSaveRef = onSave || null;
+    onCleanRef = onClean || null;
 
     const ta = document.createElement("textarea");
     ta.className = "vista-edit-doc";
@@ -76,14 +93,26 @@ export function createDocEditor() {
     mountEl.appendChild(ta);
     ta.focus();
 
+    let dirtySignalled = false;
+
     ta.addEventListener("input", () => {
+      if (!dirtySignalled) {
+        dirtySignalled = true;
+        if (onDirty) onDirty();
+      }
       clearTimeout(syncTimer);
-      syncTimer = setTimeout(() => save(ta.value, onSync), 400);
+      syncTimer = setTimeout(async () => {
+        dirtySignalled = false;
+        await save(ta.value, { onSync, onClean });
+      }, 400);
     });
-    ta.addEventListener("blur", () => {
+
+    ta.addEventListener("blur", async () => {
       clearTimeout(syncTimer);
-      save(ta.value, onSync);
+      dirtySignalled = false;
+      await save(ta.value, { onSync, onClean });
     });
+
     ta.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -92,7 +121,6 @@ export function createDocEditor() {
     });
   }
 
-  /** Immediately persist the current textarea value (call before navigating away). */
   async function flush() {
     clearTimeout(syncTimer);
     if (taRef && currentCtxId) {
@@ -100,13 +128,19 @@ export function createDocEditor() {
     }
   }
 
-  /** Clear timer and refs without saving (use only when destroying the editor). */
   function dispose() {
     clearTimeout(syncTimer);
     syncTimer = null;
     currentCtxId = null;
     taRef = null;
+    onSaveRef = null;
+    onCleanRef = null;
   }
 
-  return { mount, flush, dispose };
+  /** Current textarea value, or null when not mounted. */
+  function getCurrentValue() {
+    return taRef ? taRef.value : null;
+  }
+
+  return { mount, flush, dispose, getCurrentValue };
 }
