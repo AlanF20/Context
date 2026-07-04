@@ -22,6 +22,7 @@ import { createEditorController } from "./sidebar/editor.js";
 import { createHistoryManager } from "./sidebar/history.js";
 import { createFindBar } from "./sidebar/find.js";
 import { confirmDelete } from "./sidebar/modal.js";
+import { createAnchorStatus } from "./sidebar/anchor-status.js";
 
 const railList = $("#rail-list");
 const railAdd = $("#rail-add");
@@ -37,6 +38,7 @@ const editor = createEditorController();
 const docEditor = createDocEditor();
 const historyMgr = createHistoryManager();
 const findBar = createFindBar();
+const anchorStatus = createAnchorStatus();
 
 // =======================================================================
 //  Init
@@ -45,6 +47,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initTheme(themeToggle);
   railAdd.addEventListener("click", onCreateContext);
   document.addEventListener("keydown", onGlobalKeydown);
+  anchorStatus.init();
 
   // Pre-select the context requested by a fast-save from the capture toolbar.
   const nav = await chrome.storage.local.get('CH_NAV');
@@ -128,8 +131,14 @@ function selectedContext() {
 }
 
 async function onSelectContext(id) {
-  if (mode === "editor") await editor.flush(saveWithHistory);
-  if (mode === "vista-edit") await docEditor.flush();
+  if (mode === "editor") {
+    await editor.flush(saveWithHistory);
+    contexts = await Store.listContexts();
+  }
+  if (mode === "vista-edit") {
+    await docEditor.flush();
+    contexts = await Store.listContexts();
+  }
   findBar.dispose();
   selectedId = id;
   mode = "vista";
@@ -170,6 +179,7 @@ async function renderMain() {
   const ctx = selectedContext();
   if (!ctx) {
     editor.dispose();
+    anchorStatus.detach();
     ctxHeader.hidden = true;
     const stateEl = document.createElement("div");
     stateEl.className = "state";
@@ -191,11 +201,13 @@ async function renderMain() {
   }
   renderHeader(ctx);
   if (mode === "editor") {
+    anchorStatus.detach();
     editor.mount(bodyEl, ctx, {
       onSync: afterEditorSync,
       onSave: saveWithHistory,
     });
   } else if (mode === "vista-edit") {
+    anchorStatus.detach();
     editor.dispose();
     await docEditor.mount(bodyEl, ctx, {
       onSync: afterDocEditorSync,
@@ -209,6 +221,7 @@ async function renderMain() {
     docEditor.dispose();
     findBar.dispose();
     renderVista(bodyEl, ctx);
+    anchorStatus.attach(bodyEl, ctx);
   }
 }
 
@@ -321,7 +334,10 @@ async function afterDocEditorSync() {
 
 async function switchMode(next) {
   if (next === mode) return;
-  if (mode === "editor") await editor.flush(saveWithHistory);
+  if (mode === "editor") {
+    await editor.flush(saveWithHistory);
+    contexts = await Store.listContexts();
+  }
   if (mode === "vista-edit") {
     await docEditor.flush();
     contexts = await Store.listContexts();

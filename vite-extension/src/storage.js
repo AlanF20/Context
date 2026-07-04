@@ -188,6 +188,8 @@ export async function listSubtitles(contextId) {
  * @param {string} [opts.sourceUrl]
  * @param {string|null} [opts.rangePrefix]  — up to 50 chars before the selection (TextQuoteSelector)
  * @param {string|null} [opts.rangeSuffix]  — up to 50 chars after the selection (TextQuoteSelector)
+ * @param {number|null} [opts.rangeStart]   — selection start offset over the page text (TextPositionSelector)
+ * @param {number|null} [opts.rangeEnd]     — selection end offset over the page text (TextPositionSelector)
  * @returns {Promise<object>} the saved item
  */
 export async function addItem(contextId, opts) {
@@ -217,6 +219,10 @@ export async function addItem(contextId, opts) {
     rangeSuffix: opts.rangeSuffix != null ? String(opts.rangeSuffix).slice(0, 50) : null,
     // Raw DOM text for re-anchoring when item.text is Markdown (e.g. list captures).
     rangeText: opts.rangeText != null ? String(opts.rangeText) : null,
+    // TextPositionSelector: character offsets over the page's concatenated
+    // text-node content, captured at save time (anchoring fast path).
+    rangeStart: Number.isInteger(opts.rangeStart) ? opts.rangeStart : null,
+    rangeEnd: Number.isInteger(opts.rangeEnd) ? opts.rangeEnd : null,
   };
 
   // NOTE: duplicates are allowed by design — we never dedupe here.
@@ -349,6 +355,13 @@ export async function replaceContextFromMarkdown(contextId, md) {
     source: it.source || "",
     sourceUrl: "",
     createdAt: Date.now(),
+    // Anchoring metadata is DOM-position data that Markdown cannot carry;
+    // editor-created items are explicitly not re-anchorable (spec 004/027).
+    rangePrefix: null,
+    rangeSuffix: null,
+    rangeText: null,
+    rangeStart: null,
+    rangeEnd: null,
   }));
   await writeAll(data);
   return ctx;

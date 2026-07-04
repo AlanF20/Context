@@ -1,0 +1,79 @@
+{
+  "id": 27,
+  "status": "implemented",
+  "createdAt": "2026-07-03",
+  "author": "Spec-Writer Agent",
+  "title": "Persistencia robusta de resaltados: anclaje fuzzy, CSS Custom Highlight API y páginas dinámicas",
+  "description": "Reforma del sistema de persistencia/re-aplicación de resaltados para que el historial sobreviva recargas y revisitas de forma fiable. Cuatro frentes: (1) MODELO/ANCLAJE — se añade un TextPositionSelector al ítem (rangeStart/rangeEnd, int|null) y el matcher exacto actual (indexOf con separador \\x00) se sustituye por un pipeline de 4 niveles en un módulo nuevo src/anchor.js: posición O(1) → cita exacta con contexto → exacto normalizado (whitespace/NBSP/comillas, con mapeo de offsets de vuelta al DOM) → fuzzy con approx-string-match@2.0.0 (~2 KB gzipped, cero deps) y scoring estilo Hypothesis con presupuesto de error del 25 %. (2) PINTADO — migración completa de <mark> a la CSS Custom Highlight API (Chrome 105+): cero mutación del DOM, rangos cross-element pintables (hoy se saltan para siempre), colores por categoría pixel-idénticos vía ::highlight(); el borrado pasa de cirugía DOM a Map<itemId,{category,range}> + highlight.delete(). (3) PÁGINAS DINÁMICAS/SPA — sesión de anclaje por época de URL: MutationObserver (childList+subtree) con debounce ~350 ms + requestIdleCallback, pre-filtro sobre el texto añadido, guardarraíles (observer solo con pendientes, soft-fail a ~5 s/3 pasadas, MAX_PASSES 50, tope de índice ~2 MB) y detección de navegación SPA sin cambios de manifest (Navigation API + popstate/hashchange + fallbacks). (4) PANEL — indicador \"no encontrado en la página\" por ítem para la pestaña activa, con mensajería híbrida push (CH_ANCHOR_STATUS) + pull (CH_GET_ANCHOR_STATUS), sin persistir estado efímero en storage. Incluye el fix obligatorio del bug de datos: content-storage.js (copia divergente de storage.js) descarta rangeText al guardar, rompiendo permanentemente el re-anclaje de capturas con listas. El criterio de misma página sigue siendo location.href EXACTO (decisión del usuario). Los campos existentes rangePrefix/rangeSuffix/rangeText no se renombran: los ítems legados ganan re-anclaje fuzzy sin migración.",
+  "acceptance_criteria": [
+    "Modelo de datos: addItem/createItem en storage.js y content-storage.js aceptan y persisten rangeStart/rangeEnd (int|null, default null), y content-storage.js persiste también rangeText (fix del bug actual), quedando sincronizado con storage.js (idealmente eliminando la copia divergente vía re-export real).",
+    "Al guardar una captura, el content script calcula rangeStart/rangeEnd como offsets de carácter sobre la concatenación de los nodos de texto de document.body (orden TreeWalker, SIN separador), extendiendo extractRangeContext; ambos null si el cálculo falla.",
+    "Existe un módulo nuevo src/anchor.js con el pipeline de 4 niveles: (0) posición — raw.slice(rangeStart, rangeEnd) === cita; (1) exacto crudo prefix+cita+suffix, luego cita única; (2) exacto normalizado con mapeo de offsets normalizados→crudos; (3) fuzzy con approx-string-match, presupuesto de error min(128, ceil(len*0.25)), scoring estilo Hypothesis (similitud de cita + contexto + pista posicional). El separador \\x00 desaparece del espacio de matching.",
+    "Normalización de texto antes de los niveles 2–3: colapso de runs de whitespace (incl. \\n, \\t), NBSP U+00A0 → espacio, eliminación de soft hyphen U+00AD y zero-width (U+200B–U+200D, U+FEFF), plegado de comillas tipográficas/guiones largos a ASCII; los offsets del espacio normalizado se mapean de vuelta al espacio crudo y de ahí a un Range vía posToNodeOffset.",
+    "El fuzzy nunca ancla citas de menos de 5 caracteres; citas cortas (<16 chars) exigen score de contexto (prefix o suffix) >= 0.7; si ningún nivel produce match dentro del presupuesto, el ítem NO se pinta (mejor ausente que mal colocado) y queda en estado 'failed'.",
+    "El pintado migra por completo a la CSS Custom Highlight API: 4 highlights registrados (ch-hl-title, ch-hl-idea, ch-hl-argument, ch-hl-evidence) en CSS.highlights; content.css sustituye las reglas .ch-hl/.ch-hl-* por 4 reglas ::highlight(ch-hl-*) con background-color y color literales idénticos a los actuales (sin var()); guard de feature `if (!('highlights' in CSS))`; el pintado en vivo al guardar usa el mismo pintor (no quedan dos caminos de pintado).",
+    "Cero mutación del DOM al re-aplicar: tras la re-aplicación no existe ningún elemento <mark class='ch-hl'> en la página, y el camino de re-aplicación no llama a surroundContents, extractContents ni document.body.normalize(); el índice de texto se construye UNA vez por pasada (no una vez por ítem).",
+    "El registro por ítem vive en un Map<itemId,{category,range}> (sustituto de data-ch-id); el listener CH_REMOVE_HL se conserva y ahora elimina el rango del Highlight correspondiente, borra la entrada del Map y saca el ítem del estado de sesión (pending/anchored/failed).",
+    "Sesión de anclaje por época de URL: al cargar, si hay candidatos (it.sourceUrl === location.href && it.rangePrefix != null — filtro sin cambios), corre una pasada inicial; los no anclados quedan 'pending' y un MutationObserver sobre document.body con {childList:true, subtree:true} (sin attributes ni characterData) programa pasadas con debounce trailing ~350 ms + requestIdleCallback({timeout:1000}).",
+    "Pre-filtro de pasada: durante la ventana de debounce se acumula addedNodes.textContent y solo se ejecuta una pasada completa si contiene los primeros ~30 chars de algún ítem pendiente (rangeText || text).",
+    "Guardarraíles: el observer solo está conectado mientras pending > 0 y nunca se conecta en URLs sin ítems; soft-fail (estado 'failed' + notificación al panel) tras ~5 s o 3 pasadas; MAX_PASSES = 50 por época; tope de índice ~2 MB de texto; un anclaje tardío tras el soft-fail (lazy-load) actualiza el estado a 'anchored' y re-notifica al panel.",
+    "Un cambio de URL sin recarga (SPA) inicia una época nueva: se limpian los rangos de la época anterior de CSS.highlights, se recalculan candidatos para la nueva URL y se reinician contadores. Detección con capas: navigation.currententrychange (feature-detected) + popstate + hashchange + comparación de location.href al inicio de cada pasada debounced + poll de 1500 ms SOLO si window.navigation no existe. manifest.json queda sin cambios (nada de permiso webNavigation en esta versión; es el plan B documentado si la verificación manual V3 demuestra que la Navigation API no dispara en el isolated world).",
+    "El criterio de misma página sigue siendo location.href EXACTO: cero normalización de URL (requisito del usuario); una URL con #fragment o query distinta NO re-aplica, y eso no es un bug.",
+    "Estado de anclaje hacia el panel: el content script mantiene Map<itemId,'pending'|'anchored'|'failed'> por página y lo comunica (a) push: chrome.runtime.sendMessage({type:'CH_ANCHOR_STATUS', url, statuses}).catch(()=>{}) en cada cambio, y (b) pull: el sidebar envía CH_GET_ANCHOR_STATUS a la pestaña activa al renderizar y en chrome.tabs.onActivated + onUpdated (status 'complete'); un sendMessage rechazado (chrome://, PDFs) = estado 'página no abierta', sin errores en consola.",
+    "La Vista muestra, para la pestaña activa, una franja de estado de anclaje que lista los ítems del contexto cuyo estado es 'failed' con el indicador «no encontrado en la página» (texto del ítem truncado); tres estados globales: anclados (sin aviso), no encontrados (franja con lista), página no abierta en la pestaña activa (franja oculta o atenuada). El estado de anclaje NUNCA se persiste en chrome.storage.local.",
+    "Compatibilidad hacia atrás: los ítems legados sin rangeStart/rangeEnd anclan por los niveles 1–3 sin migración alguna; los ítems con rangePrefix == null se excluyen sin lanzar errores; buildMd/parseMd no cambian (los campos de anclaje siguen invisibles al contrato Markdown, y createItem defaultea los nuevos a null).",
+    "approx-string-match@2.0.0 se añade como dependencia npm normal (Vite la bundlea localmente; sin CDN ni código remoto en runtime, MV3-safe).",
+    "pnpm run build termina sin errores (resuelve el import de approx-string-match y el módulo nuevo src/anchor.js).",
+    "init.sh pasa sin errores.",
+    "La verificación manual sigue docs/test_highlight_persistence_robustness.md (a formalizar por el Tester a partir de los escenarios V1–V9 del research §9): recarga estática, selección cross-node, navegación SPA/pushState (incluida la verificación de la Navigation API en isolated world), lazy-load/scroll infinito, tolerancia fuzzy (<25 % re-ancla; >25 % o cita <5 chars NO pinta), badge del panel en sus tres estados, ítems legados, regresiones del flujo existente (pintado en vivo, colores, rangeText en capturas de listas, URL exacta) y consola limpia/sin re-escaneos perpetuos."
+  ],
+  "implementation_plan": {
+    "npm_dependencies": [
+      "approx-string-match@2.0.0 (Myers bit-paralelo, patrón de longitud arbitraria, ~2 KB gzipped, cero deps, MIT, incluye .d.ts)"
+    ],
+    "files": [
+      {
+        "file": "vite-extension/package.json",
+        "change": "Añadir approx-string-match@2.0.0 a dependencies."
+      },
+      {
+        "file": "vite-extension/src/anchor.js (NUEVO)",
+        "change": "Módulo ES con: normalize(text) → {norm, map} (colapso de whitespace/NBSP, strip de soft-hyphen/zero-width, plegado de comillas, array de mapeo de offsets norm→raw); reanchor(item, index) con los 4 niveles del pipeline; scoring estilo Hypothesis portado de match-quote.ts (~100–120 líneas, atribución BSD-2-Clause en comentario). Sin dependencia del DOM salvo la conversión final a Range (recibe el índice como parámetro)."
+      },
+      {
+        "file": "vite-extension/src/content.js",
+        "change": "(1) extractRangeContext calcula además rangeStart/rangeEnd (preRange.toString().length / + range.toString().length) y fastSave/doSave los pasan a addItem. (2) Pintor nuevo: paintRange(range, category, itemId) → CSS.highlights + Map<itemId,{category,range}>; highlightSavedRange y la re-aplicación usan el mismo pintor; se eliminan applyMark/surroundContents/extractContents/normalize() del camino de re-aplicación; buildTextIndex pierde el +1 del SEP (offsets contiguos) y el índice se construye una vez por pasada. (3) Sesión de anclaje por época de URL: máquina de estados pending/anchored/failed, MutationObserver debounced con pre-filtro y guardarraíles, limpieza de CSS.highlights al cambiar de época. (4) Detección de URL: currententrychange/popstate/hashchange/href-check/poll-fallback. (5) Mensajería: emitir CH_ANCHOR_STATUS, responder CH_GET_ANCHOR_STATUS, adaptar CH_REMOVE_HL al Map."
+      },
+      {
+        "file": "vite-extension/src/content.css",
+        "change": "Sustituir .ch-hl y .ch-hl-{title,idea,argument,evidence} (~líneas 419–434) por 4 reglas ::highlight(ch-hl-*) con los background-color/color literales actuales. El resto del CSS (popup, toolbar) queda intacto."
+      },
+      {
+        "file": "vite-extension/src/content-storage.js",
+        "change": "Sincronizar addItem con storage.js: persistir rangeText (bug actual) + rangeStart/rangeEnd nuevos; preferible convertir el módulo en re-export real de storage.js para eliminar la copia divergente (evaluar tamaño de bundle del content script al hacerlo)."
+      },
+      {
+        "file": "vite-extension/src/storage.js",
+        "change": "createItem/addItem: aceptar y defaultear rangeStart/rangeEnd a null (espejo de rangePrefix/rangeSuffix). buildMd/parseMd sin cambios."
+      },
+      {
+        "file": "vite-extension/src/sidebar/vista.js + vite-extension/src/sidebar.js (posible módulo nuevo src/sidebar/anchor-status.js)",
+        "change": "Franja de estado de anclaje sobre el preview de la Vista: pide CH_GET_ANCHOR_STATUS a la pestaña activa (chrome.tabs.query sin permiso 'tabs'; host permissions <all_urls> ya cubren tab.url), escucha CH_ANCHOR_STATUS push, se refresca en tabs.onActivated/onUpdated-complete, y lista los ítems 'failed' con «no encontrado en la página». Estilos en sidebar.css con tokens existentes (claro/oscuro)."
+      },
+      {
+        "file": "vite-extension/manifest.json",
+        "change": "SIN CAMBIOS (verificación de que sigue sin necesitar webNavigation)."
+      }
+    ]
+  },
+  "out_of_scope": [
+    "Normalización de URL (hash/params volátiles): decisión explícita del usuario — el filtro sigue siendo location.href exacto.",
+    "Fix de replaceContextFromMarkdown destruyendo los metadatos de anclaje de todo el contexto al editar Markdown (modo de fallo §2.2-7 del research): problema ortogonal al matcher/pintor; candidata a feature 28. Se documenta como limitación conocida.",
+    "Backfill oportunista de rangeStart/rangeEnd en ítems legados que anclen por niveles 0–2 (research §7.2-7): diferible; los legados ya ganan fuzzy sin él.",
+    "Botón de borrado por ítem en la Vista (emisor de CH_REMOVE_HL): la Vista sigue siendo preview Markdown; esta spec solo añade la franja de estado, no restaura acciones por ítem.",
+    "Shadow DOM e iframes (igual que en la spec 004).",
+    "Retiro formal de la feature 26 (rehighlight_button): la sesión con MutationObserver + retries la deja previsiblemente superseded; decidir con el usuario en el cierre de sesión."
+  ],
+  "dependencies": [4, 25],
+  "research_path": "docs/research_highlight_persistence_robustness.md"
+}

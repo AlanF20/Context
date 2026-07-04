@@ -188,3 +188,132 @@ _No sessions recorded yet._
 ## Next step
 
 Complete research artifact and `docs/research_capture_button_redesign.md`, then move to Spec-Writer.
+
+---
+
+# Session: rehighlight_button (id 26) — STALLED, archived 2026-07-03
+
+> This session was found abandoned at the Interviewer step (no research, no spec,
+> no code artifacts). Its feature_list.json entry was malformed (appended outside
+> the features array), breaking init.sh. Archived as-is; feature 26 reset to pending.
+
+- **Feature in progress:** `rehighlight_button` (id: 26)
+- **Started:** 2026-06-30
+- **Active agent:** Interviewer
+- **Retry count:** 0 / 3
+- **Spec approved by human:** _—_
+
+## Log
+
+- 2026-06-30: Session started. init.sh green. feature_list.json updated (id 26, in_progress).
+
+---
+
+# Current session
+
+> Reset this file at the end of every session by appending its content to `history.md`.
+> Keep it updated **in real time** while working, not at the end.
+
+- **Feature in progress:** `highlight_persistence_robustness` (id: 27)
+- **Started:** 2026-07-03
+- **Active agent:** Reviewer
+- **Retry count:** 0 / 3
+- **Spec approved by human:** ✅ 2026-07-03 ("Sí, aprobar")
+
+## Plan
+
+1. ✅ init.sh — red on first run (feature_list.json malformed by stale session 26); repaired JSON, green on re-run
+2. ✅ Read progress/current.md — stale session for feature 26 (rehighlight_button) stalled at Interviewer; archived to history.md, feature 26 reset to pending
+3. ✅ Add feature 27 to feature_list.json (in_progress, spec_path: null)
+4. ✅ Interviewer — 4 questions answered (see Log)
+5. ✅ Researcher → docs/research_highlight_persistence_robustness.md (workflow: 4 research agents + synthesis + critic; 1 gap found and repaired)
+6. ✅ Spec-Writer → specs/027-spec-highlight_persistence_robustness.json (status: draft)
+7. ✅ Human approval gate — APPROVED 2026-07-03
+8. ✅ Tester → docs/test_highlight_persistence_robustness.md
+9. ✅ Implementer → vite-extension/src/ (see Log)
+10. ✅ Reviewer → init.sh ✅ + pnpm run build ✅ + manual review (workflow hit org spend limit, see Log)
+11. ✅ Close session
+
+## Log
+
+- 2026-07-03: init.sh FAILED — feature_list.json invalid JSON (feature 26 was appended outside the features array by the previous session). Repaired array structure; init.sh green on re-run.
+- 2026-07-03: Previous session (feature 26, stalled at Interviewer, no artifacts produced) archived to history.md. Feature 26 reset to `pending` — pending user confirmation on whether feature 27 supersedes it.
+- 2026-07-03: Feature 27 `highlight_persistence_robustness` added to feature_list.json as in_progress. User request: "verify and find the better way to keep the historial of highlighted text if the page refresh, or when I re visit a previous page where I highlight something."
+- 2026-07-03: Context recon: specs 004 (TextQuoteSelector persistence) and 025 (border-fix) read. Known gaps: SPAs, editor-created items (rangePrefix null), fragile matching on DOM change.
+
+- 2026-07-03: Interviewer done. Answers: (1) scope = static AND dynamic/SPA pages (late-rendered content must get highlighted); (2) same-page criterion = EXACT URL match, unchanged (no URL normalization); (3) lost text = fuzzy matching for minor changes + panel indicator "no encontrado en la página" when anchoring fails; (4) architecture = open to migrating painting to CSS Custom Highlight API if research supports it, keeping stored data compatible. Feature 26 stays pending; may be retired if 27 supersedes it.
+
+- 2026-07-03: Researcher done (workflow wf_0ad178dc-d46, 7 agents, ~13 min). Doc at docs/research_highlight_persistence_robustness.md. Key findings: 15 concrete failure modes incl. 2 data bugs (content-storage.js drops rangeText; Markdown editor destroys anchors context-wide). Recommendation: TextPositionSelector + 4-level matching pipeline (approx-string-match@2.0.0 fuzzy), full migration to CSS Custom Highlight API, URL-epoch anchoring session with MutationObserver, hybrid push+pull panel messaging.
+- 2026-07-03: Spec-Writer done. specs/027-spec-highlight_persistence_robustness.json written (draft), spec_path registered in feature_list.json. Presented to user for approval.
+
+- 2026-07-03: GATE PASSED — user approved spec 027 ("Sí, aprobar"). Spec status set to approved.
+
+- 2026-07-03: Tester done — docs/test_highlight_persistence_robustness.md (build gate + V1–V9).
+- 2026-07-03: Implementer note — research suggested converting content-storage.js into a re-export of storage.js, but content.js:16-20 documents the copy is DELIBERATE (a shared Rollup chunk becomes a CRXJS web-accessible resource without chrome.storage access). Decision: keep the copy, regenerate it from the updated storage.js (fixes the rangeText bug + drift), document sync requirement in its header.
+
+- 2026-07-03: Implementer done. Changes: package.json +approx-string-match@2.0.0 (pnpm store migrated v11→v10 with `pnpm install`); src/anchor.js NEW (4-level pipeline: position → exact → normalized exact w/ offset map → fuzzy Myers + Hypothesis-style scoring, 25% budget, short-quote guards); storage.js addItem +rangeStart/rangeEnd, replaceContextFromMarkdown defaults anchor fields to null; content-storage.js regenerated as exact copy of storage.js (fixes dropped rangeText bug; header documents the deliberate-copy constraint); content.js: extractRangeContext +position offsets, painter migrated to CSS Custom Highlight API (paintedRanges Map, feature-guarded), per-URL anchoring session (MutationObserver childList+subtree, 350ms debounce, prefilter, revalidation of collapsed ranges, GRACE 5s/3 passes soft-fail, MAX_PASSES 50, 2MB index cap), SPA URL detection (Navigation API + popstate/hashchange + poll fallback), CH_ANCHOR_STATUS push + CH_GET_ANCHOR_STATUS pull, CH_REMOVE_HL now unpaints via registry; content.css: .ch-hl* → ::highlight(ch-hl-*); sidebar/anchor-status.js NEW (strip "no encontrado en la página", 3 states, never persisted) wired in sidebar.js (attach in vista, detach elsewhere); sidebar.css strip styles.
+- 2026-07-03: Reviewer: pnpm run build ✅ (content.js 23.76 kB), init.sh ✅. Adversarial review workflow launched (3 lenses + verify) — ALL 3 agents failed: "org's monthly spend limit" hit mid-run. `confirmed: []` from that run is NOT a clean bill of health — it means zero review coverage, not zero defects. Discarded that result.
+- 2026-07-04: Model switched to claude-sonnet-5, ultracode off. Did a manual review myself in place of re-running the (expensive) workflow, to respect the spend limit: verified content-storage.js is byte-identical to storage.js past the header (rangeText bug fix holds); syntax-checked anchor.js/content.js/anchor-status.js. Found ONE real bug by manual read-through: `extractRangeContext` (content.js) computed rangePrefix/rangeSuffix/rangeStart/rangeEnd from the RAW (untrimmed) Range, but the stored quote (`item.text`/`rangeText`) is `sel.toString().trim()` — a coordinate-space mismatch. Any selection with boundary whitespace (common with drag-selects) made anchoring level 0 (position) permanently dead and broke level 1's anchored prefix+quote+suffix match, silently falling back to the no-context "unique quote" path and losing duplicate-quote disambiguation — undermining the exact motivation for adding rangeStart/rangeEnd. Fixed: extractRangeContext now trims range.toString() and shifts prefix/suffix/offsets by the leading/trailing whitespace trimmed, so all four fields align with the trimmed stored quote. Rebuilt (pnpm run build ✅) and re-ran init.sh ✅ after the fix.
+- 2026-07-04: NOT independently re-verified by a second pass (no adversarial workflow re-run, to avoid hitting the spend limit again). Flagging as residual risk for whoever picks this up next: re-run the review workflow (or a manual second pass) once the org spend limit resets, focusing on content.js session/observer lifecycle and anchor.js fuzzy-scoring edge cases (candidates with c.end > map.length, division-by-zero on empty quotes) — these were assigned to lenses that never got to run.
+- 2026-07-04: Session closed. Feature 27 marked done in feature_list.json. User said "hola" / "finish" — closing out per harness rules (session log → history.md, current.md reset, feature status updated).
+
+## Next step
+
+None — session closed. See docs/test_highlight_persistence_robustness.md for the manual verification checklist (V1–V9) still owed before calling this feature fully field-tested in Chrome.
+
+---
+
+# Follow-up: revisión adversaria manual de feature 27 (2026-07-04)
+
+El workflow adversario original (3 agentes) había fallado por completo al chocar con el límite
+de gasto mensual de la organización — `confirmed: []` no era una revisión limpia, era cero
+cobertura. A petición del usuario ("Crea agentes con este modelo para realizar la tarea que los
+agentes pasados iban a realizar para asegurar que lo generado es correcto"), se relanzó la
+revisión con 3 agentes en paralelo usando claude-sonnet-5 (modelo activo de la sesión), cubriendo
+las mismas 3 lentes: anchor.js (offsets/fuzzy), ciclo de vida de sesión/pintor/mensajería en
+content.js, y cumplimiento de los 20 acceptance_criteria de la spec 027 + panel.
+
+## Hallazgos y resolución
+
+- **anchor.js**: sin hallazgos nuevos — el fix de offsets de la sesión anterior se sostiene.
+- **content.js (sesión/pintor/mensajería)**: 6 hallazgos, 4 relevantes a feature 27 + 2
+  preexistentes (no introducidos por esta feature, hallados de paso).
+- **spec + panel**: cumplimiento de los 20 CA confirmado; 1 hallazgo (contexts obsoleto en
+  sidebar.js al salir de modo Editor).
+
+## Fixes aplicados (7)
+
+1. Race de URL en `fastSave`/`doSave` (content.js): `highlightSavedRange`/`noteLiveAnchor` podían
+   pintar/anclar un ítem a la sesión de una página distinta si una navegación SPA ocurría durante
+   el `await Store.addItem(...)`. Fix: capturar `location.href` antes del await, comparar después.
+2. Timer de soft-fail huérfano en `startAnchorSession` (content.js): invocaciones solapadas podían
+   dejar un `setTimeout` sin cancelar, marcando ítems 'failed' antes de tiempo. Fix: `clearTimeout`
+   defensivo justo antes de instalar el nuevo timer (tras el await).
+3. Contaminación cruzada de pestañas en `CH_ANCHOR_STATUS` (anchor-status.js): el broadcast de
+   cualquier pestaña con sesión activa podía sobrescribir la franja de la pestaña activa en el
+   panel. Fix: filtrar por `sender.tab.id` contra el `activeTabId` conocido (confirmado con la
+   documentación de Chrome que `sender.tab` SÍ se puebla para content scripts).
+4. `contexts` obsoleto en `sidebar.js` (`switchMode`/`onSelectContext`, rama `mode === "editor"`):
+   no se refrescaba `contexts` tras `editor.flush()`, a diferencia de la rama `vista-edit`. Fix:
+   añadir `contexts = await Store.listContexts()` en ambas funciones, igualando el patrón.
+5. `fastSave`: `sendMessage(CH_OPEN_PANEL_CTX)` sin `.catch` (preexistente, inconsistente con el
+   resto del archivo). Fix: `.catch(() => {})`.
+6. Timer del toast de éxito del toolbar (`showToolbarSuccess`, preexistente) podía cerrar un
+   toolbar nuevo abierto por una selección posterior dentro de los 450ms. Fix: capturar el
+   elemento por closure en vez de depender de la variable global mutable.
+7. Mismo patrón que 6, encontrado en la verificación adversaria de los fixes: el
+   `setTimeout(teardown, 500)` de `doSave()` podía cerrar un popup/toolbar nuevo. Fix: capturar
+   `popEl` por closure, sin tocar `removeToolbar()`.
+
+Verificación adversaria final (1 agente, sonnet) sobre los 7 fixes: los 6 primeros CORRECTOS
+(incluyendo confirmación documental de que `sender.tab.id` se puebla para content scripts en
+`chrome.runtime.onMessage`), con una advertencia residual menor no bloqueante (orden de resolución
+de `queryActiveTab()` en `activeTabId`) y el hallazgo #7 arriba, que también se corrigió.
+
+`pnpm run build` ✅ e `init.sh` ✅ tras cada tanda de cambios. No se tocó `progress/current.md`
+(no había sesión activa del harness — se decidió registrar este trabajo directamente aquí en vez
+de reabrir el ciclo completo del pipeline, al ser una revisión de calidad sobre una feature ya
+`done`, no una feature nueva).
+
+**Pendiente**: la verificación manual en Chrome real (docs/test_highlight_persistence_robustness.md,
+V1–V9) sigue sin ejecutarse.

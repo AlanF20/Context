@@ -398,8 +398,7 @@
       "spec_path": "specs/025-spec-highlight_persistence_border_fix.json",
       "dependencies": [4],
       "status": "done"
-    }
-  ],
+    },
     {
       "id": 26,
       "name": "rehighlight_button",
@@ -408,7 +407,17 @@
       "acceptance_criteria": [],
       "spec_path": null,
       "dependencies": [4, 25],
-      "status": "in_progress"
+      "status": "pending"
+    },
+    {
+      "id": 27,
+      "name": "highlight_persistence_robustness",
+      "title": "Auditoría y mejora de la persistencia de resaltados (recarga y revisita)",
+      "description": "Verificar la fiabilidad del mecanismo actual de persistencia/re-aplicación de resaltados (features 4 y 25) y determinar la mejor estrategia para que el historial de resaltados sobreviva recargas y revisitas a páginas donde ya se resaltó texto: anclaje robusto de rangos, re-aplicación al cargar, y degradación segura si el DOM cambió.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/027-spec-highlight_persistence_robustness.json",
+      "dependencies": [4, 25],
+      "status": "done"
     }
   ],
   "evaluations": [

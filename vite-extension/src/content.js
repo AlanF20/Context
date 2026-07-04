@@ -19,6 +19,7 @@
 // Chrome then executes that WAR without chrome.storage access. Separate copies
 // avoid the shared chunk entirely.
 import * as Store from './content-storage.js';
+import { findMatch } from './anchor.js';
 
 let savedText = "";
 let savedRawText = "";
@@ -274,18 +275,24 @@ function showToolbar(rect) {
 /** Save directly to detected context without opening the popup. */
 async function fastSave(ctx, category) {
   try {
-    const { rangePrefix, rangeSuffix } = extractRangeContext(savedRange);
+    const capturedUrl = location.href;
+    const { rangePrefix, rangeSuffix, rangeStart, rangeEnd } = extractRangeContext(savedRange);
     const savedItem = await Store.addItem(ctx.id, {
       text: savedText,
       category,
       linkedSubtitleId: null,
-      sourceUrl: location.href,
+      sourceUrl: capturedUrl,
       rangePrefix,
       rangeSuffix,
+      rangeStart,
+      rangeEnd,
       rangeText: savedRawText !== savedText ? savedRawText : null,
     });
-    highlightSavedRange(category, savedItem.id);
-    chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id });
+    // A SPA navigation during the await above would move `location.href` and
+    // reset the anchoring session to the new URL — painting/anchoring the old
+    // item there would attribute it to the wrong page (spec 027 review).
+    if (location.href === capturedUrl) highlightSavedRange(category, savedItem);
+    chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id }).catch(() => {});
     showToolbarSuccess(category);
   } catch (err) {
     console.error('[CH] fast-save error:', err);
@@ -295,10 +302,17 @@ async function fastSave(ctx, category) {
 
 function showToolbarSuccess(category) {
   if (!toolbarEl) return;
-  toolbarEl.classList.add('ch-toolbar-success');
-  toolbarEl.dataset.successCat = category;
-  toolbarEl.innerHTML = '<span class="ch-toolbar-success-text">✓ Guardado</span>';
-  setTimeout(removeToolbar, 450);
+  const el = toolbarEl;
+  el.classList.add('ch-toolbar-success');
+  el.dataset.successCat = category;
+  el.innerHTML = '<span class="ch-toolbar-success-text">✓ Guardado</span>';
+  // Capture the element instead of relying on the (possibly reassigned) global:
+  // a new selection within this timeout would swap toolbarEl to a fresh
+  // toolbar, and removeToolbar() would close that one instead of this toast.
+  setTimeout(() => {
+    if (el.parentNode) el.parentNode.removeChild(el);
+    if (toolbarEl === el) toolbarEl = null;
+  }, 450);
 }
 
 function removeToolbar() {
@@ -561,6 +575,7 @@ async function openPopup(rect, initialCategory = 'idea') {
       return showStatus(els.status, "Elige o crea un contexto.", true);
     }
     try {
+      const capturedUrl = location.href;
       let ctx = selectedCtx;
       if (!ctx) {
         ctx =
@@ -573,19 +588,30 @@ async function openPopup(rect, initialCategory = 'idea') {
         isText && els.nestSelect && els.nestSelect.value
           ? els.nestSelect.value
           : null;
-      const { rangePrefix, rangeSuffix } = extractRangeContext(savedRange);
+      const { rangePrefix, rangeSuffix, rangeStart, rangeEnd } = extractRangeContext(savedRange);
       const savedItem = await Store.addItem(ctx.id, {
         text: savedText,
         category,
         linkedSubtitleId,
-        sourceUrl: location.href,
+        sourceUrl: capturedUrl,
         rangePrefix,
         rangeSuffix,
+        rangeStart,
+        rangeEnd,
         rangeText: savedRawText !== savedText ? savedRawText : null,
       });
-      highlightSavedRange(category, savedItem.id);
+      // See fastSave: a navigation during the awaits above must not attribute
+      // this item's live paint/anchor to whatever page loaded in the meantime.
+      if (location.href === capturedUrl) highlightSavedRange(category, savedItem);
       showStatus(els.status, "Guardado ✓", false);
-      setTimeout(teardown, 500);
+      // Capture this popup instead of calling teardown() (which reads the
+      // global popEl/toolbarEl) — a new selection within these 500ms could
+      // open a fresh popup or toolbar that this timeout must not touch.
+      const thisPopEl = popEl;
+      setTimeout(() => {
+        if (thisPopEl.parentNode) thisPopEl.parentNode.removeChild(thisPopEl);
+        if (popEl === thisPopEl) popEl = null;
+      }, 500);
     } catch (err) {
       console.error(err);
       showStatus(els.status, "No se pudo guardar.", true);
@@ -613,55 +639,73 @@ function showStatus(el, msg, isError) {
   el.classList.toggle("ch-status-error", !!isError);
 }
 
-// ----- TextQuoteSelector helpers (range persistence) -----
+// ----- range selectors (persistence metadata) -----
 
 /**
- * Extract up to 50 chars of surrounding text from a Range for anchoring.
- * Returns { rangePrefix, rangeSuffix } — both null on error or missing range.
+ * Extract anchoring metadata from a Range at save time:
+ *   rangePrefix / rangeSuffix — up to 50 chars of surrounding text
+ *   (TextQuoteSelector); rangeStart / rangeEnd — character offsets of the
+ *   selection over the concatenated text-node content of document.body
+ *   (TextPositionSelector). All fields null on error or missing range.
  */
 function extractRangeContext(range) {
-  if (!range) return { rangePrefix: null, rangeSuffix: null };
+  if (!range) {
+    return { rangePrefix: null, rangeSuffix: null, rangeStart: null, rangeEnd: null };
+  }
   try {
     const preRange = document.createRange();
     preRange.setStart(document.body, 0);
     preRange.setEnd(range.startContainer, range.startOffset);
-    const rangePrefix = preRange.toString().slice(-50);
+    const before = preRange.toString();
 
     const postRange = document.createRange();
     postRange.setStart(range.endContainer, range.endOffset);
     postRange.setEnd(document.body, document.body.childNodes.length);
-    const rangeSuffix = postRange.toString().slice(0, 50);
+    const after = postRange.toString();
 
-    return { rangePrefix, rangeSuffix };
+    // The stored quote is trimmed (savedRawText = sel.toString().trim()), but
+    // `range` is the raw, untrimmed selection. Re-align the offsets/prefix/
+    // suffix to the TRIMMED text so they share a coordinate space with
+    // item.text/rangeText — otherwise level 0 (position) never matches and
+    // level 1's prefix+quote+suffix anchor silently breaks whenever the
+    // selection has boundary whitespace (common with drag-selections).
+    const rawRangeText = range.toString();
+    const trimmed = rawRangeText.trim();
+    const leadTrim = rawRangeText.length - rawRangeText.replace(/^\s+/, "").length;
+
+    // Range.toString() concatenates text nodes with no separators — the same
+    // coordinate space buildTextIndex() produces, so these offsets remain
+    // directly comparable on revisit (level 0 of the anchoring pipeline).
+    return {
+      rangePrefix: (before + rawRangeText.slice(0, leadTrim)).slice(-50),
+      rangeSuffix: (rawRangeText.slice(leadTrim + trimmed.length) + after).slice(0, 50),
+      rangeStart: before.length + leadTrim,
+      rangeEnd: before.length + leadTrim + trimmed.length,
+    };
   } catch (_) {
-    return { rangePrefix: null, rangeSuffix: null };
+    return { rangePrefix: null, rangeSuffix: null, rangeStart: null, rangeEnd: null };
   }
 }
 
-// Separator used between text nodes in the concatenated index string.
-// \x00 never appears in real page text, so any indexOf match that spans
-// this character must cross a node boundary and is unsafe to highlight.
-const SEP = '\x00';
+// ----- text index (page text ↔ DOM ranges) -----
+
+// Pathological pages (infinite feeds) are indexed only up to this many chars.
+const INDEX_CHAR_CAP = 2_000_000;
 
 /**
- * Collect visible text nodes under root (excluding .ch-hl children)
- * with their cumulative character offsets.
- * Nodes are logically separated by SEP in the fullText string, so offsets
- * account for +1 per node boundary.
+ * Collect the text nodes under root with their cumulative character offsets.
+ * Offsets are contiguous (no separators) so they line up with Range.toString()
+ * and with the rangeStart/rangeEnd offsets captured at save time.
  */
 function buildTextIndex(root) {
   const nodes = [];
   let offset = 0;
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(n) {
-      if (n.parentElement && n.parentElement.closest('.ch-hl')) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let node;
   while ((node = walker.nextNode())) {
     nodes.push({ node, start: offset });
-    offset += node.textContent.length + 1; // +1 for SEP after each node
+    offset += node.textContent.length;
+    if (offset > INDEX_CHAR_CAP) break;
   }
   return nodes;
 }
@@ -676,142 +720,401 @@ function posToNodeOffset(textNodes, pos) {
   return null;
 }
 
-/**
- * Locate item.text in the current DOM using TextQuoteSelector logic.
- * Level 1: anchored search (prefix + exact + suffix).
- * Level 2: exact only if unique on the page.
- * Returns a live Range, or null if not found.
- */
-function findRangeForItem(item, textNodes, fullText) {
-  const exact = item.text;
-  const prefix = item.rangePrefix || '';
-  const suffix = item.rangeSuffix || '';
+/** Build a DOM Range for raw [start, end) offsets over the index. */
+function rangeFromOffsets(textNodes, start, end) {
+  const s = posToNodeOffset(textNodes, start);
+  const e = posToNodeOffset(textNodes, end);
+  if (!s || !e) return null;
+  try {
+    const r = document.createRange();
+    r.setStart(s.node, Math.min(s.offset, s.node.textContent.length));
+    r.setEnd(e.node, Math.min(e.offset, e.node.textContent.length));
+    return r.collapsed ? null : r;
+  } catch (_) {
+    return null;
+  }
+}
 
-  if (prefix || suffix) {
-    const idx = fullText.indexOf(prefix + exact + suffix);
-    if (idx !== -1) {
-      const exactStart = idx + prefix.length;
-      // If the exact portion contains SEP it crosses a node boundary — skip.
-      if (!fullText.slice(exactStart, exactStart + exact.length).includes(SEP)) {
-        const s = posToNodeOffset(textNodes, exactStart);
-        const e = posToNodeOffset(textNodes, exactStart + exact.length);
-        if (s && e) {
-          const r = document.createRange();
-          r.setStart(s.node, s.offset);
-          r.setEnd(e.node, e.offset);
-          return r;
+// ----- painter (CSS Custom Highlight API — zero DOM mutation) -----
+
+const HL_NAME_PREFIX = 'ch-hl-';
+const HL_CATEGORIES = ['title', 'idea', 'argument', 'evidence'];
+// itemId -> { category, range } — replaces the old data-ch-id attribute.
+const paintedRanges = new Map();
+
+function highlightApiAvailable() {
+  return typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined';
+}
+
+function categoryHighlight(category) {
+  const name = HL_NAME_PREFIX + category;
+  let hl = CSS.highlights.get(name);
+  if (!hl) {
+    hl = new Highlight();
+    CSS.highlights.set(name, hl);
+  }
+  return hl;
+}
+
+/** Paint a Range for an item, replacing any previous paint for the same id. */
+function paintRange(range, category, itemId) {
+  if (!highlightApiAvailable() || !range || !itemId) return;
+  unpaintItem(itemId);
+  const cat = HL_CATEGORIES.includes(category) ? category : 'idea';
+  categoryHighlight(cat).add(range);
+  paintedRanges.set(itemId, { category: cat, range });
+}
+
+function unpaintItem(itemId) {
+  const rec = paintedRanges.get(itemId);
+  if (!rec) return;
+  if (highlightApiAvailable()) categoryHighlight(rec.category).delete(rec.range);
+  paintedRanges.delete(itemId);
+}
+
+function clearAllPaint() {
+  if (highlightApiAvailable()) {
+    for (const cat of HL_CATEGORIES) {
+      const hl = CSS.highlights.get(HL_NAME_PREFIX + cat);
+      if (hl) hl.clear();
+    }
+  }
+  paintedRanges.clear();
+}
+
+// ----- live highlight on save -----
+
+function highlightSavedRange(category, item) {
+  if (!savedRange || !item) return;
+  paintRange(savedRange.cloneRange(), category, item.id);
+  noteLiveAnchor(item);
+}
+
+// ----- anchoring session (per-URL epoch state machine) -----
+//
+// IDLE → ANCHORING (initial pass + MutationObserver-driven passes) → DONE.
+// Pending items are retried on mutation bursts until MAX_PASSES; after the
+// grace window they soft-fail (reported to the panel) but stay retryable, so
+// lazy-loaded content can still anchor late. A URL change starts a new epoch.
+
+const DEBOUNCE_MS = 350;
+const IDLE_TIMEOUT_MS = 1000;
+const GRACE_MS = 5000;
+const SOFT_FAIL_PASSES = 3;
+const MAX_PASSES = 50;
+const PREFILTER_PROBE_LEN = 30;
+const MUTATION_BUFFER_CAP = 65536;
+
+const session = {
+  url: null,
+  items: new Map(),     // itemId -> item (all candidates for this URL)
+  pending: new Set(),   // itemIds not currently anchored
+  statuses: new Map(),  // itemId -> 'pending' | 'anchored' | 'failed'
+  observer: null,
+  debounceTimer: null,
+  idleScheduled: false,
+  passes: 0,
+  graceDeadline: 0,
+  softFailTimer: null,
+  buffer: '',
+  bufferOverflow: false,
+};
+
+function quoteOf(item) {
+  // List captures store Markdown in item.text; item.rangeText has the raw DOM text.
+  return (item && (item.rangeText || item.text)) || '';
+}
+
+/** Start (or restart) the anchoring session for the current URL. */
+async function startAnchorSession() {
+  stopObserver();
+  clearTimeout(session.softFailTimer);
+  clearAllPaint();
+  session.url = location.href;
+  session.items.clear();
+  session.pending.clear();
+  session.statuses.clear();
+  session.passes = 0;
+  session.graceDeadline = Date.now() + GRACE_MS;
+
+  try {
+    const data = await Store.readAll();
+    for (const ctx of Object.values(data.contexts)) {
+      for (const it of ctx.items || []) {
+        if (it.sourceUrl === session.url && it.rangePrefix != null) {
+          session.items.set(it.id, it);
+          session.pending.add(it.id);
+          session.statuses.set(it.id, 'pending');
         }
       }
     }
-  }
-
-  // Fallback: unique exact match
-  const firstIdx = fullText.indexOf(exact);
-  if (
-    firstIdx !== -1 &&
-    !fullText.slice(firstIdx, firstIdx + exact.length).includes(SEP) &&
-    fullText.indexOf(exact, firstIdx + 1) === -1
-  ) {
-    const s = posToNodeOffset(textNodes, firstIdx);
-    const e = posToNodeOffset(textNodes, firstIdx + exact.length);
-    if (s && e) {
-      const r = document.createRange();
-      r.setStart(s.node, s.offset);
-      r.setEnd(e.node, e.offset);
-      return r;
-    }
-  }
-
-  return null;
-}
-
-/** Wrap a Range in a .ch-hl mark element with a data-ch-id attribute. */
-function applyMark(range, category, itemId) {
-  const mark = document.createElement('mark');
-  mark.className = 'ch-hl ch-hl-' + (category || 'idea');
-  mark.dataset.chId = itemId;
-  try {
-    range.surroundContents(mark);
-  } catch (_) {
-    try {
-      mark.appendChild(range.extractContents());
-      range.insertNode(mark);
-    } catch (__) {
-      // range spans partial element boundaries — skip
-    }
-  }
-}
-
-/** Re-apply all saved highlights for the current page URL on load. */
-async function reapplyHighlights() {
-  try {
-    const currentUrl = location.href;
-    const data = await Store.readAll();
-    const candidates = [];
-    for (const ctx of Object.values(data.contexts)) {
-      for (const it of ctx.items || []) {
-        if (it.sourceUrl === currentUrl && it.rangePrefix != null) candidates.push(it);
-      }
-    }
-    if (!candidates.length) return;
-    for (const item of candidates) {
-      // Rebuild text index after each mark insertion to keep positions accurate.
-      const textNodes = buildTextIndex(document.body);
-      const fullText = textNodes.map(n => n.node.textContent).join(SEP);
-      // List captures store Markdown in item.text; item.rangeText has the raw DOM text.
-      const searchItem = item.rangeText ? { ...item, text: item.rangeText } : item;
-      const range = findRangeForItem(searchItem, textNodes, fullText);
-      if (range) {
-        applyMark(range, item.category, item.id);
-        // Merge empty/fragmented text nodes left by extractContents() so the
-        // next iteration's buildTextIndex sees a clean, stable node structure.
-        document.body.normalize();
-      }
-    }
   } catch (err) {
-    console.warn('[CH] reapplyHighlights error:', err);
+    console.warn('[CH] anchor session init error:', err);
+    return;
   }
+
+  notifyAnchorStatus();
+  if (!session.pending.size) return; // never observe URLs with no items
+
+  // Defensive re-clear: if another startAnchorSession() call overlapped this
+  // one (both awaiting Store.readAll() around the same URL change) and lost
+  // the race to install its own timer first, this prevents that timer from
+  // being orphaned (uncleared, still scheduled) when this call overwrites
+  // the field — an orphaned timer would soft-fail items on the wrong clock.
+  clearTimeout(session.softFailTimer);
+  session.softFailTimer = setTimeout(markPendingAsFailed, GRACE_MS);
+  scheduleIdlePass();
+  startObserver();
 }
 
-/** Remove a highlight <mark> by item id, restoring its text in place. */
-function removeHighlightById(itemId) {
-  const mark = document.querySelector('[data-ch-id="' + CSS.escape(itemId) + '"]');
-  if (!mark || !mark.parentNode) return;
-  const parent = mark.parentNode;
-  while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-  parent.removeChild(mark);
-  parent.normalize();
-}
-
-// ----- page highlight -----
-function highlightSavedRange(category, itemId) {
-  if (!savedRange) return;
-  const mark = document.createElement("mark");
-  mark.className = "ch-hl ch-hl-" + (category || "idea");
-  if (itemId) mark.dataset.chId = itemId;
-  try {
-    savedRange.surroundContents(mark);
-  } catch (_) {
-    try {
-      mark.appendChild(savedRange.extractContents());
-      savedRange.insertNode(mark);
-    } catch (__) {
-      /* selection spans complex nodes — skip highlighting */
+function markPendingAsFailed() {
+  let changed = false;
+  for (const id of session.pending) {
+    if (session.statuses.get(id) !== 'failed') {
+      session.statuses.set(id, 'failed');
+      changed = true;
     }
   }
+  if (changed) notifyAnchorStatus();
 }
 
-// ----- message listener (remove highlight from page) -----
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'CH_REMOVE_HL') removeHighlightById(msg.itemId);
+function scheduleIdlePass() {
+  if (session.idleScheduled) return;
+  session.idleScheduled = true;
+  const run = () => {
+    session.idleScheduled = false;
+    runAnchorPass();
+  };
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run, { timeout: IDLE_TIMEOUT_MS });
+  } else {
+    setTimeout(run, 100);
+  }
+}
+
+/**
+ * Detect painted ranges killed by DOM replacement (framework re-renders
+ * collapse live Ranges) and put their items back in play.
+ */
+function revalidatePainted() {
+  let requeued = false;
+  for (const [id, rec] of [...paintedRanges]) {
+    if (rec.range.collapsed || !rec.range.startContainer.isConnected) {
+      unpaintItem(id);
+      if (session.items.has(id)) {
+        session.pending.add(id);
+        session.statuses.set(id, 'pending');
+        requeued = true;
+      }
+    }
+  }
+  if (requeued) notifyAnchorStatus();
+  return requeued;
+}
+
+/** One full anchoring pass: index the page once, try every pending item. */
+function runAnchorPass() {
+  if (location.href !== session.url) {
+    startAnchorSession();
+    return;
+  }
+  revalidatePainted();
+  if (!session.pending.size) {
+    maybeStopObserver();
+    return;
+  }
+  session.passes++;
+  if (session.passes > MAX_PASSES) {
+    stopObserver();
+    markPendingAsFailed();
+    return;
+  }
+
+  const textNodes = buildTextIndex(document.body);
+  const raw = textNodes.map((n) => n.node.textContent).join('');
+  let changed = false;
+
+  for (const id of [...session.pending]) {
+    const item = session.items.get(id);
+    const quote = quoteOf(item);
+    if (!quote) {
+      session.pending.delete(id);
+      session.statuses.set(id, 'failed');
+      changed = true;
+      continue;
+    }
+    const hit = findMatch(raw, {
+      quote,
+      prefix: item.rangePrefix || '',
+      suffix: item.rangeSuffix || '',
+      hintStart: item.rangeStart,
+      hintEnd: item.rangeEnd,
+    });
+    if (!hit) continue;
+    const range = rangeFromOffsets(textNodes, hit.start, hit.end);
+    if (!range) continue;
+    paintRange(range, item.category, id);
+    session.pending.delete(id);
+    if (session.statuses.get(id) !== 'anchored') {
+      session.statuses.set(id, 'anchored'); // late anchors upgrade a soft-fail
+      changed = true;
+    }
+  }
+
+  // After the grace window, report still-unanchored items to the panel
+  // (they stay retryable until MAX_PASSES).
+  if (session.passes >= SOFT_FAIL_PASSES || Date.now() >= session.graceDeadline) {
+    for (const id of session.pending) {
+      if (session.statuses.get(id) !== 'failed') {
+        session.statuses.set(id, 'failed');
+        changed = true;
+      }
+    }
+  }
+
+  maybeStopObserver();
+  if (changed) notifyAnchorStatus();
+}
+
+/** Record a just-saved item as anchored for the panel status strip. */
+function noteLiveAnchor(item) {
+  if (!item || !item.id) return;
+  if (session.url === null) session.url = location.href;
+  if (session.url !== location.href) return;
+  session.items.set(item.id, item);
+  session.pending.delete(item.id);
+  session.statuses.set(item.id, 'anchored');
+  notifyAnchorStatus();
+}
+
+// ----- MutationObserver (dynamic pages: SPA renders, lazy-load) -----
+
+function startObserver() {
+  if (session.observer) return;
+  // The Highlight API painter never mutates the DOM, so every record here is a
+  // page-driven change — no self-write guard needed.
+  session.observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const n of m.addedNodes) {
+        if (session.bufferOverflow) break;
+        const t = n.textContent || '';
+        if (session.buffer.length + t.length > MUTATION_BUFFER_CAP) {
+          session.buffer = '';
+          session.bufferOverflow = true;
+        } else {
+          session.buffer += t;
+        }
+      }
+    }
+    clearTimeout(session.debounceTimer);
+    session.debounceTimer = setTimeout(onMutationBurst, DEBOUNCE_MS);
+  });
+  session.observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function stopObserver() {
+  if (session.observer) {
+    session.observer.disconnect();
+    session.observer = null;
+  }
+  clearTimeout(session.debounceTimer);
+  session.debounceTimer = null;
+  session.buffer = '';
+  session.bufferOverflow = false;
+}
+
+/** Disconnect once nothing is pending and the initial grace window is over. */
+function maybeStopObserver() {
+  if (!session.pending.size && Date.now() >= session.graceDeadline) stopObserver();
+}
+
+/** Cheap gate: only run a full pass if the added text can contain a pending quote. */
+function prefilterHit(probe) {
+  if (!probe) return false;
+  const squash = (s) => s.replace(/\s+/g, ' ').toLowerCase();
+  const hay = squash(probe);
+  for (const id of session.pending) {
+    const q = squash(quoteOf(session.items.get(id)).slice(0, PREFILTER_PROBE_LEN));
+    if (q && hay.includes(q)) return true;
+  }
+  return false;
+}
+
+function onMutationBurst() {
+  if (location.href !== session.url) {
+    startAnchorSession(); // SPA navigations almost always mutate the DOM
+    return;
+  }
+  const probe = session.buffer;
+  const overflow = session.bufferOverflow;
+  session.buffer = '';
+  session.bufferOverflow = false;
+
+  let needsPass = revalidatePainted();
+  if (!needsPass && session.pending.size) {
+    needsPass = overflow || prefilterHit(probe);
+  }
+  if (needsPass) scheduleIdlePass();
+  else maybeStopObserver();
+}
+
+// ----- messaging (panel status + highlight removal) -----
+
+function notifyAnchorStatus() {
+  try {
+    // Fire-and-forget: only lands if the side panel is open.
+    chrome.runtime
+      .sendMessage({
+        type: 'CH_ANCHOR_STATUS',
+        url: session.url,
+        statuses: Object.fromEntries(session.statuses),
+      })
+      .catch(() => {});
+  } catch (_) {
+    /* extension context invalidated — ignore */
+  }
+}
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === 'CH_REMOVE_HL') {
+    unpaintItem(msg.itemId);
+    session.items.delete(msg.itemId);
+    session.pending.delete(msg.itemId);
+    if (session.statuses.delete(msg.itemId)) notifyAnchorStatus();
+    maybeStopObserver();
+  }
+  if (msg && msg.type === 'CH_GET_ANCHOR_STATUS') {
+    sendResponse({ url: location.href, statuses: Object.fromEntries(session.statuses) });
+  }
 });
 
-// ----- initialization: re-apply saved highlights for this page -----
-if ('requestIdleCallback' in window) {
-  requestIdleCallback(() => reapplyHighlights(), { timeout: 2000 });
-} else {
-  setTimeout(reapplyHighlights, 100);
+// ----- SPA navigation detection (no manifest changes) -----
+
+function checkUrlChange() {
+  if (location.href !== session.url) startAnchorSession();
 }
+
+function watchUrlChanges() {
+  const deferredCheck = () => setTimeout(checkUrlChange, 0);
+  // Navigation API (Chrome 102+) covers pushState/replaceState/back/forward.
+  // Availability in content-script isolated worlds is feature-detected here;
+  // plan B (chrome.webNavigation in background) is documented in spec 027.
+  if (window.navigation && typeof window.navigation.addEventListener === 'function') {
+    try {
+      window.navigation.addEventListener('currententrychange', deferredCheck);
+    } catch (_) {
+      setInterval(checkUrlChange, 1500);
+    }
+  } else {
+    setInterval(checkUrlChange, 1500); // slow poll only without Navigation API
+  }
+  window.addEventListener('popstate', deferredCheck);
+  window.addEventListener('hashchange', deferredCheck);
+}
+
+// ----- initialization: anchor saved highlights for this page -----
+watchUrlChanges();
+startAnchorSession();
 
 // ----- positioning -----
 function position(el, rect) {

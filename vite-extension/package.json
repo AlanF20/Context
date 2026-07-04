@@ -11,6 +11,7 @@
     "vite": "^7.0.0"
   },
   "dependencies": {
+    "approx-string-match": "2.0.0",
     "dompurify": "^3.4.11",
     "lucide": "^1.21.0",
     "marked": "^18.0.5"

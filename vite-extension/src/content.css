@@ -416,19 +416,13 @@
 .ch-status.ch-status-error { color: #d4564f; }
 .ch-status[hidden] { display: none; }
 
-/* ---- Page highlight (intentionally affects the host page) ----
-   Colors differ by category so the highlight on the source page matches
-   the meaning. Each keeps a dark, legible text color on its pastel bg. */
-.ch-hl {
-  background: #fdeaa8;
-  color: #3a2f0b;
-  font-weight: inherit !important;
-  font-style: inherit !important;
-  padding: 0 1px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-}
-.ch-hl-title { background: #f6b8c4; color: #5a1020; }
-.ch-hl-idea { background: #fdeaa8; color: #6a5413; }
-.ch-hl-argument { background: #bcd3f5; color: #14315f; }
-.ch-hl-evidence { background: #bfe6c8; color: #16432a; }
+/* ---- Page highlight (CSS Custom Highlight API) ----
+   Painted from content.js via CSS.highlights — zero DOM mutation, so page
+   styles and framework re-renders can't clash with it. ::highlight() only
+   allows color/background-color (plus text-decoration/-shadow); values are
+   literals because custom properties inside highlight pseudos have had spec
+   churn. Colors match Store.CATEGORIES (hlBg/hlFg). */
+::highlight(ch-hl-title) { background-color: #f6b8c4; color: #5a1020; }
+::highlight(ch-hl-idea) { background-color: #fdeaa8; color: #6a5413; }
+::highlight(ch-hl-argument) { background-color: #bcd3f5; color: #14315f; }
+::highlight(ch-hl-evidence) { background-color: #bfe6c8; color: #16432a; }
