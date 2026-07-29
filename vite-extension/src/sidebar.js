@@ -12,7 +12,7 @@
  * Data flows through chrome.storage.local, accessed via store.js (Store).
  * ---------------------------------------------------------------------------
  */
-import { createElement, Sparkles, Download } from "lucide";
+import { createElement, Sparkles, Download, ChevronDown } from "lucide";
 import { $ } from "./sidebar/dom.js";
 import { Store } from "./sidebar/store.js";
 import { initTheme } from "./sidebar/theme.js";
@@ -23,6 +23,8 @@ import { createHistoryManager } from "./sidebar/history.js";
 import { createFindBar } from "./sidebar/find.js";
 import { confirmDelete } from "./sidebar/modal.js";
 import { createAnchorStatus } from "./sidebar/anchor-status.js";
+import { EXPORT_FORMATS } from "./sidebar/export-formats.js";
+import { createExportMenu } from "./sidebar/export-menu.js";
 
 const railList = $("#rail-list");
 const railAdd = $("#rail-add");
@@ -39,6 +41,7 @@ const docEditor = createDocEditor();
 const historyMgr = createHistoryManager();
 const findBar = createFindBar();
 const anchorStatus = createAnchorStatus();
+const exportMenu = createExportMenu();
 
 // =======================================================================
 //  Init
@@ -180,6 +183,7 @@ async function renderMain() {
   if (!ctx) {
     editor.dispose();
     anchorStatus.detach();
+    exportMenu.dispose();
     ctxHeader.hidden = true;
     const stateEl = document.createElement("div");
     stateEl.className = "state";
@@ -232,11 +236,12 @@ function countItems(ctx) {
 }
 
 function renderHeader(ctx) {
+  exportMenu.dispose(); // header is about to be rebuilt — drop any open menu tied to the old button
   const counts = countItems(ctx);
   ctxHeader.hidden = false;
   ctxHeader.innerHTML = "";
 
-  // Row 1: color dot + name (dbl-click to rename) + unsaved dot + .md download
+  // Row 1: color dot + name (dbl-click to rename) + unsaved dot + export menu
   const row1 = document.createElement("div");
   row1.className = "ctx-title-row";
   const dot = document.createElement("span");
@@ -255,16 +260,24 @@ function renderHeader(ctx) {
   unsavedDot.hidden = true;
   unsavedDot.setAttribute("aria-label", "Cambios sin guardar");
 
-  const mdBtn = document.createElement("button");
-  mdBtn.className = "btn md ghost";
-  mdBtn.title = "Descargar como Markdown";
-  mdBtn.setAttribute("aria-label", "Descargar como Markdown");
+  const exportBtn = document.createElement("button");
+  exportBtn.className = "btn export ghost";
+  exportBtn.title = "Exportar";
+  exportBtn.setAttribute("aria-label", "Exportar");
+  exportBtn.setAttribute("aria-haspopup", "menu");
+  exportBtn.setAttribute("aria-expanded", "false");
+  const exportLabel = document.createElement("span");
+  exportLabel.textContent = "Exportar";
   const dlIcon = createElement(Download, { width: 13, height: 13 });
   dlIcon.style.pointerEvents = "none";
-  mdBtn.append(makeMdMark(), dlIcon);
-  mdBtn.addEventListener("click", () => downloadMd(ctx));
+  const chevIcon = createElement(ChevronDown, { width: 12, height: 12 });
+  chevIcon.style.pointerEvents = "none";
+  exportBtn.append(dlIcon, exportLabel, chevIcon);
+  exportBtn.addEventListener("click", () => {
+    exportMenu.toggle(exportBtn, EXPORT_FORMATS, (formatId) => downloadExport(ctx, formatId));
+  });
 
-  row1.append(dot, name, unsavedDot, mdBtn);
+  row1.append(dot, name, unsavedDot, exportBtn);
 
   // Row 2: counter + Vista/Editor segmented toggle
   const row2 = document.createElement("div");
@@ -471,40 +484,28 @@ function openFind() {
 //  Helpers
 // =======================================================================
 
-function makeMdMark() {
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", "0 0 208 128");
-  svg.setAttribute("width", "28");
-  svg.setAttribute("height", "28");
-  svg.setAttribute("fill", "currentColor");
-  svg.setAttribute("class", "md-mark");
-  svg.setAttribute("aria-hidden", "true");
-  const rect = document.createElementNS(NS, "rect");
-  rect.setAttribute("width", "198");
-  rect.setAttribute("height", "118");
-  rect.setAttribute("x", "5");
-  rect.setAttribute("y", "5");
-  rect.setAttribute("ry", "10");
-  rect.setAttribute("stroke", "currentColor");
-  rect.setAttribute("stroke-width", "10");
-  rect.setAttribute("fill", "none");
-  const path = document.createElementNS(NS, "path");
-  path.setAttribute("d", "M30 98V30h20l20 25 20-25h20v68H90V59L70 84 50 59v39zm125 0l-30-33h20V30h20v35h20z");
-  svg.append(rect, path);
-  return svg;
-}
-
-function downloadMd(ctx) {
-  const liveDocMd = mode === "vista-edit"
-    ? bodyEl.querySelector(".vista-edit-doc")?.value
-    : null;
-  const md = liveDocMd || (mode === "editor" && editor.peek(ctx.id)) || Store.buildMd(ctx);
-  const blob = new Blob([md], { type: "text/markdown" });
+/**
+ * Resolve and download a context in the chosen export format.
+ * Markdown keeps today's live-buffer behavior (reflects unsaved vista-edit/
+ * editor changes); every other format reads the persisted state, since only
+ * Markdown has a "buffer" concept (spec 028 AC-15).
+ */
+async function downloadExport(ctx, formatId) {
+  const format = EXPORT_FORMATS.find((f) => f.id === formatId) || EXPORT_FORMATS[0];
+  let content;
+  if (formatId === "markdown") {
+    const liveDocMd =
+      mode === "vista-edit" ? bodyEl.querySelector(".vista-edit-doc")?.value : null;
+    content = liveDocMd || (mode === "editor" && editor.peek(ctx.id)) || format.build(ctx);
+  } else {
+    const freshCtx = (await Store.getContext(ctx.id)) || ctx;
+    content = format.build(freshCtx);
+  }
+  const blob = new Blob([content], { type: format.mime });
   const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement("a"), {
     href: url,
-    download: `${sanitizeFilename(ctx.name)}.md`,
+    download: `${sanitizeFilename(ctx.name)}.${format.extension}`,
   });
   document.body.appendChild(a);
   a.click();

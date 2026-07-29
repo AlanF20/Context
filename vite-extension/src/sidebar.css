@@ -230,19 +230,6 @@ body {
 .btn:hover { filter: brightness(0.95); }
 .btn.ghost { background: transparent; color: var(--accent); }
 .btn.ghost:hover { background: var(--accent-soft); filter: none; }
-.btn.md {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  flex-shrink: 0;
-}
-.btn.md .md-mark {
-  height: auto;
-  display: block;
-  flex-shrink: 0;
-}
-
 .ctx-meta-row {
   display: flex;
   align-items: center;
@@ -476,6 +463,45 @@ body {
   white-space: nowrap;
 }
 .find-action-btn:hover { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+
+/* ===== Export button + menu ===== */
+.btn.export {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  flex-shrink: 0;
+}
+.export-menu {
+  position: fixed;
+  z-index: 30;
+  min-width: 168px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 24px var(--shadow-lg);
+}
+.export-menu-item {
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--ui);
+  font-size: 12.5px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.export-menu-item:hover,
+.export-menu-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
 
 /* ===== Monaco tab dirty indicator ===== */
 .tab-dirty {

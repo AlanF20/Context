@@ -4,11 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "vitest run",
+    "test:e2e": "vite build && playwright test"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "latest",
-    "vite": "^7.0.0"
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^26.1.2",
+    "jsdom": "^30.0.1",
+    "vite": "^7.0.0",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "approx-string-match": "2.0.0",

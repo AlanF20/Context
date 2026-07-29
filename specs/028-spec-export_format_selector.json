@@ -1,0 +1,63 @@
+{
+  "id": 28,
+  "status": "approved",
+  "createdAt": "2026-07-29",
+  "author": "Claude",
+  "title": "Selector de formato de exportación (Markdown + Anki)",
+  "description": "El botón único de descarga '.md' se reemplaza por un botón 'Exportar' con menú desplegable, pensado para escalar a más formatos en el futuro (p. ej. asociados a una autenticación con Google aún no implementada) sin rediseñar la UI. Esta primera iteración ofrece dos formatos: Markdown (comportamiento actual, sin cambios) y un nuevo export de tarjetas estilo Anki (TSV) generado a partir de los items del contexto, como puente hacia herramientas de repetición espaciada.",
+  "acceptance_criteria": [
+    "AC-01 [Botón reemplazado]: El botón único `.md` (mdBtn, sidebar.js:258-266) se reemplaza por un botón 'Exportar' con un ícono de chevron indicando menú desplegable.",
+    "AC-02 [Menú de formatos]: Al hacer clic en 'Exportar' se abre un menú flotante con dos ítems: 'Markdown (.md)' y 'Tarjetas Anki (.txt)'.",
+    "AC-03 [Cierre del menú]: El menú se cierra al elegir un ítem, al hacer clic fuera de él, o al presionar Escape (el foco vuelve al botón 'Exportar').",
+    "AC-04 [Registro extensible]: Los formatos se definen en un módulo nuevo `sidebar/export-formats.js` como un array `EXPORT_FORMATS` de objetos `{ id, label, extension, mime, build(ctx) }`. Agregar un formato futuro debe ser agregar una entrada al array, sin tocar el componente de menú.",
+    "AC-05 [Export Markdown sin regresión]: Elegir 'Markdown (.md)' produce exactamente el mismo archivo que el botón `.md` actual: mismo contenido resuelto según el modo activo (vista-edit → buffer vivo del textarea; editor → `editor.peek(ctx.id)`; si no, `Store.buildMd(ctx)`), mismo nombre de archivo vía `sanitizeFilename`.",
+    "AC-06 [Generador Anki — items de texto]: Para cada item `type: 'text'` (categoría idea/argumento/evidencia) se genera una fila Front/Back. Front = `¿Qué {label de categoría} se capturó sobre \"{texto del subtítulo padre}\"?` vía `linkedSubtitleId`; si no hay subtítulo padre, Front = `¿Qué {label} se capturó en {nombre del contexto}?`. Back = `{item.text}`, y si `item.source` existe, una línea adicional `Fuente: {item.source}`.",
+    "AC-07 [Generador Anki — subtítulos]: Para cada item `type: 'subtitle'` con al menos un item de texto anidado, se genera una fila adicional: Front = `¿De qué trata la sección \"{item.text}\"?`; Back = los textos de sus hijos, cada uno prefijado por el label de su categoría, unidos por ' / '. Subtítulos sin hijos no generan fila.",
+    "AC-08 [Formato de archivo Anki]: Texto plano separado por tabulador con cabecera `#separator:tab`, `#html:false`, `#tags column:3`, seguida de una fila por tarjeta (columnas Front, Back, Tags). Se descarga como `{nombre-contexto-sanitizado}.anki.txt`, mime `text/plain`.",
+    "AC-09 [Tags]: La columna Tags incluye, separados por espacio: el id de categoría (o `subtitle` para tarjetas de resumen), el hostname de `source` si existe, y el nombre del contexto sanitizado (mismo criterio que `sanitizeFilename`, en minúsculas, espacios → guion bajo).",
+    "AC-10 [Escapado TSV]: Cualquier tabulador o salto de línea dentro de un campo se reemplaza por un espacio simple antes de escribir la fila.",
+    "AC-11 [Sin memoria de selección]: El menú no persiste ni preselecciona el último formato elegido; cada apertura muestra ambas opciones sin distinción de 'última usada' (decisión explícita del usuario).",
+    "AC-12 [Sin cambios al modelo de datos]: No se agregan campos a `storage.js` ni se modifica `buildMd`/`parseMd`. El generador Anki es una función de solo lectura sobre `ctx.items`.",
+    "AC-13 [Accesibilidad del menú]: El botón 'Exportar' usa `aria-haspopup='menu'` y `aria-expanded` según estado. El menú usa `role='menu'`, los ítems `role='menuitem'`, navegables con flechas arriba/abajo + Enter, cerrable con Escape.",
+    "AC-14 [Estilos separados]: Estilos del botón/menú en `sidebar.css` (nada de `style=` inline); DOM generado vía `document.createElement`, consistente con el resto de `renderHeader`.",
+    "AC-15 [Fuente de datos para Anki]: El export Anki siempre se genera desde el estado persistido de `ctx.items` (chrome.storage.local), independientemente de si el modo activo es `vista-edit`/`editor` con cambios sin guardar. El export Markdown conserva su comportamiento actual de reflejar el buffer en vivo (AC-05).",
+    "AC-16 [Build]: `pnpm run build` termina sin errores.",
+    "AC-17 [Harness]: `init.sh` pasa sin errores de sintaxis."
+  ],
+  "files_changed": [
+    {
+      "path": "vite-extension/src/sidebar/export-formats.js",
+      "changes": [
+        "Nuevo módulo. Exporta `EXPORT_FORMATS` con dos entradas: markdown (envuelve la resolución actual de downloadMd) y anki.",
+        "buildAnkiExport(ctx): recorre ctx.items linealmente llevando el último subtitle visto (mismo patrón que buildMd), genera filas Front/Back/Tags según AC-06/AC-07, arma el archivo con cabecera #separator/#html/#tags según AC-08."
+      ]
+    },
+    {
+      "path": "vite-extension/src/sidebar/export-menu.js",
+      "changes": [
+        "Nuevo módulo. Componente de menú flotante mínimo (mount/dispose), en el mismo espíritu que sidebar/modal.js: recibe EXPORT_FORMATS y un callback onSelect(formatId), maneja teclado (flechas/Enter/Escape) y cierre por click-outside."
+      ]
+    },
+    {
+      "path": "vite-extension/src/sidebar.js",
+      "changes": [
+        "renderHeader(): reemplazar mdBtn por un botón 'Exportar' + ícono chevron que abre exportMenu.mount(...).",
+        "downloadMd(ctx) se generaliza a downloadExport(ctx, formatId): resuelve el contenido según el formato elegido (para markdown, reutiliza exactamente la lógica actual de resolución de modo; para anki, usa Store.getContext(ctx.id) fresco) y dispara la descarga con el mime/extension del formato."
+      ]
+    },
+    {
+      "path": "vite-extension/src/sidebar.css",
+      "changes": [
+        "Añadir estilos para `.export-btn`, `.export-menu`, `.export-menu-item`, `.export-menu-item:hover/:focus-visible`, con overrides claro/oscuro consistentes con los tokens existentes."
+      ]
+    }
+  ],
+  "dependencies": [],
+  "out_of_scope": [
+    "Persistir o recordar el último formato elegido (rechazado explícitamente por el usuario)",
+    "Un tercer formato (p. ej. JSON crudo) — el registro queda extensible en código pero esta feature solo entrega Markdown + Anki",
+    "Cualquier implementación real de autenticación (Google u otra) — se menciona solo como motivación futura",
+    "Personalización de la plantilla Front/Back de las tarjetas Anki",
+    "Deduplicación de tarjetas entre exports sucesivos del mismo contexto"
+  ]
+}

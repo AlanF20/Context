@@ -1,0 +1,39 @@
+{
+  "id": 29,
+  "status": "implemented",
+  "createdAt": "2026-07-29",
+  "author": "Spec-Writer Agent",
+  "title": "E2E Playwright: resaltar texto, recargar y verificar re-highlight en sitios reales",
+  "description": "Nueva spec E2E (Playwright, sobre la extensión ya construida en dist/) que ejercita el flujo completo highlight → reload → re-anclaje contra una URL externa real, no una fixture local. El spec abre https://www.houstonmethodist.org/es/why-choose-houston-methodist/blog/2025/april/what-is-cortisol/, realiza una selección de texto real (arrastre de mouse, no Selection API scripteada) sobre el primer párrafo de cuerpo del artículo, la guarda como categoría 'idea' vía la toolbar/popup de captura del content script, recarga la página, y verifica que el ítem quedó 'anchored' consultando el canal ya existente CH_GET_ANCHOR_STATUS (no se inspecciona CSS.highlights desde page.evaluate por la incertidumbre de visibilidad cross-realm documentada en la investigación). Las URLs de prueba se extraen a un array reutilizable (tests/e2e/fixtures/test-sites.js) con un selector de párrafo por sitio, para que añadir más URLs en el futuro no requiera tocar el spec. Esta iteración solo puebla y ejercita la entrada de Houston Methodist; el resto de la infraestructura queda lista para más entradas.",
+  "acceptance_criteria": [
+    "Existe tests/e2e/fixtures/test-sites.js que exporta TEST_SITES: Array<{label, url, articleSelector}>, con exactamente una entrada para Houston Methodist (url y articleSelector '.horizontal-text.txt-container p' verificados en la investigación).",
+    "Existe tests/e2e/029-highlight-reload-real-sites.spec.js que, para la entrada de Houston Methodist: navega a la URL real, localiza el párrafo vía articleSelector, y selecciona su texto con un arrastre de mouse real (page.mouse.move/down/move/up), no vía Selection API scripteada ni locator.selectText().",
+    "Tras la selección aparece la toolbar de captura (.ch-toolbar) y el test hace clic en el swatch de categoría 'idea'; como no existe contexto previo para esa URL, se abre el popup completo (openPopup), el test escribe un nombre de contexto nuevo en el combobox y confirma con Enter o clic en 'Guardar'.",
+    "El test lee el texto del párrafo en el momento de la ejecución (no un string hardcodeado embebido en el spec) para tolerar ediciones futuras del artículo real.",
+    "Tras guardar, el test recarga la página (page.reload()) y espera (con reintentos/polling, no un timeout fijo) a que CH_GET_ANCHOR_STATUS — consultado desde el service worker de la extensión vía chrome.tabs.query + chrome.tabs.sendMessage, sin cambios de manifest.json — reporte el ítem guardado con estado 'anchored'.",
+    "El test falla (no queda colgado indefinidamente) si el estado nunca llega a 'anchored' dentro de una ventana acorde a GRACE_MS/MAX_PASSES de content.js (asegurar un timeout explícito y razonable en la espera, no el timeout genérico de Playwright).",
+    "No se modifica content.js, storage.js, ni ningún archivo de src/ — esta feature es puramente de test, no de producto.",
+    "pnpm run test:e2e ejecuta este spec (build + playwright test) y termina en verde en el entorno local del usuario (con display real, headless: false, per fixtures.js existente).",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_plan": {
+    "files": [
+      {
+        "file": "vite-extension/tests/e2e/fixtures/test-sites.js (NUEVO)",
+        "change": "export const TEST_SITES = [{ label, url, articleSelector }], una entrada para Houston Methodist con articleSelector '.horizontal-text.txt-container p'."
+      },
+      {
+        "file": "vite-extension/tests/e2e/029-highlight-reload-real-sites.spec.js (NUEVO)",
+        "change": "Importa fixtures.js (context/extensionId/page) y TEST_SITES. test.beforeEach/test único: goto(url) → leer texto del articleSelector vía page.evaluate → obtener bounding box del párrafo → mouse.move/down/move/up para seleccionar → esperar .ch-toolbar visible → click swatch [data-cat='idea'] → esperar popup → escribir nombre de contexto en el combobox → Enter → esperar cierre del popup → page.reload() → helper waitForAnchorStatus(context, extensionId, url) que hace polling sobre chrome.tabs.query + chrome.tabs.sendMessage(tabId, {type:'CH_GET_ANCHOR_STATUS'}) ejecutado en el service worker (context.serviceWorkers()[0].evaluate) hasta ver 'anchored' o agotar un timeout explícito."
+      }
+    ]
+  },
+  "out_of_scope": [
+    "Ejecutar el spec contra más de la URL de Houston Methodist en esta iteración (el array queda listo, pero solo una entrada se puebla/ejercita, según lo acordado con el usuario).",
+    "Verificación visual/pixel del resaltado (color real en pantalla) — la prueba se apoya en el canal CH_GET_ANCHOR_STATUS ya existente, no en capturas de pantalla ni en inspección de CSS.highlights.",
+    "Manejo de banners de cookies/consentimiento del sitio real si aparecieran — se investigará durante el Tester/Implementer si bloquean la selección; no es un requisito de esta spec a priori.",
+    "Cualquier cambio a manifest.json, content.js, storage.js u otro archivo de producto."
+  ],
+  "dependencies": [4, 25, 27],
+  "research_path": "docs/research_e2e_highlight_reload_real_sites.md"
+}

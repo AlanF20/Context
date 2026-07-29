@@ -418,6 +418,35 @@
       "spec_path": "specs/027-spec-highlight_persistence_robustness.json",
       "dependencies": [4, 25],
       "status": "done"
+    },
+    {
+      "id": 29,
+      "name": "e2e_highlight_reload_real_sites",
+      "title": "E2E Playwright: resaltar texto, recargar y verificar re-highlight en sitios reales",
+      "description": "Spec Playwright que abre una URL real externa (no una fixture local), resalta texto vía el content script, recarga la página y verifica que el highlight persiste (features 4/25/27). Las URLs de prueba viven en un array reutilizable para poder añadir más sitios en el futuro sin tocar la lógica del test.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/029-spec-e2e_highlight_reload_real_sites.json",
+      "dependencies": [4, 25, 27],
+      "status": "done"
+    },
+    {
+      "id": 28,
+      "name": "export_format_selector",
+      "title": "Selector de formato de exportación (Markdown + Anki)",
+      "description": "Reemplazar el botón único de descarga '.md' por un selector de formato de exportación pensado para escalar: primera iteración con Markdown (actual) y un nuevo formato de tarjetas estilo Anki (TSV) generado a partir de los items 'text' (idea/argumento/evidencia), como puente hacia herramientas de repetición espaciada. El selector debe diseñarse para admitir más formatos en el futuro (p.ej. asociados a una autenticación con Google aún no implementada) sin rediseñar la UI de exportación.",
+      "acceptance_criteria": [
+        "El botón único '.md' se reemplaza por un botón 'Exportar' con menú desplegable (Markdown / Tarjetas Anki).",
+        "Los formatos se definen en un registro extensible (sidebar/export-formats.js) — agregar uno futuro no toca el componente de menú.",
+        "Export Markdown sin regresión: mismo contenido y nombre de archivo que el botón '.md' anterior, incluyendo el buffer en vivo de vista-edit/editor.",
+        "Export Anki (.txt, TSV) genera una tarjeta Front/Back por item de texto (idea/argumento/evidencia) y una tarjeta resumen por subtítulo con hijos, con cabecera #separator/#html/#tags y columna de tags.",
+        "El export Anki siempre lee el estado persistido de ctx.items, ignorando cambios sin guardar en vista-edit/editor.",
+        "El menú no recuerda el último formato elegido (decisión explícita del usuario).",
+        "No se modifican storage.js, buildMd ni parseMd.",
+        "pnpm run build e init.sh pasan sin errores."
+      ],
+      "spec_path": "specs/028-spec-export_format_selector.json",
+      "dependencies": [],
+      "status": "done"
     }
   ],
   "evaluations": [

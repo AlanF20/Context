@@ -18,6 +18,84 @@
 
 ---
 
+## Session 2026-07-29 — Feature #29: e2e_highlight_reload_real_sites
+
+**Status:** done
+
+**Summary:** New Playwright E2E spec proving the highlight-persistence pipeline (features 4/25/27)
+against a real external page (not a local fixture): drags a real mouse selection over Houston
+Methodist's cortisol article's first body paragraph, saves it via the content script's capture
+popup, reloads, and confirms re-anchoring. Pure test-infra feature — no changes to `src/`.
+
+**Key research finding:** `content.js` paints highlights via the CSS Custom Highlight API with
+zero DOM mutation — there is no `.ch-hl-*` element to query from `page.evaluate()`, and cross-realm
+visibility of `CSS.highlights` between the content script's isolated world and the page's main
+world is unverified. The spec instead polls the already-shipped `CH_GET_ANCHOR_STATUS` message
+(the same channel behind the anchor-status-strip panel feature, commit `63d9011`) from the
+extension's service worker via `chrome.tabs.sendMessage` — no manifest changes needed.
+
+**Changes:**
+- `vite-extension/tests/e2e/fixtures/test-sites.js` (new): exports `TEST_SITES`, an array of
+  `{label, url, articleSelector}` — only Houston Methodist populated this iteration; the shape is
+  the "rule" the user asked for so more URLs can be added later without touching the spec.
+- `vite-extension/tests/e2e/029-highlight-reload-real-sites.spec.js` (new): full flow — real
+  mouse drag over the live-read paragraph text (not hardcoded, tolerates future article edits),
+  clicks the "idea" swatch, fills+saves the capture popup (first visit to the URL → no
+  `fastSave` shortcut, goes through the full popup), reads the saved item id from
+  `chrome.storage.local`, reloads, and polls anchor status until `'anchored'` or an explicit
+  timeout.
+
+**Bug found and fixed during Reviewer pass:** first run failed — `.ch-toolbar` never appeared.
+Root cause: `Locator.boundingBox()` doesn't scroll the element into view, and the target
+paragraph was below the fold, so the mouse-drag coordinates landed outside the actual rendered
+viewport (no selection, no `mouseup`, no toolbar). Fix: `paragraph.scrollIntoViewIfNeeded()`
+before reading the bounding box. All 6 E2E specs (the existing feature-28 suite + this new one)
+pass together after the fix.
+
+**Known accepted risk (not a defect):** depends on a live third-party site with no network
+mocking — if Houston Methodist changes its template or blocks automation, this test can fail for
+reasons unrelated to the extension. Documented in `docs/research_e2e_highlight_reload_real_sites.md`
+and `docs/test_e2e_highlight_reload_real_sites.md`.
+
+---
+
+## Follow-up 2026-07-29 (same day) — Feature #29: 3 more test sites added
+
+**Status:** done
+
+**Summary:** User asked to extend the real-site E2E coverage to 3 more URLs (a Medium article, the
+AnkiWeb docs, Wikipedia (es) Cortisol). Extended `test-sites.js` to 4 entries and converted the
+single hardcoded test into a loop over `TEST_SITES`. Getting all 4 green (plus the original
+Houston Methodist entry) surfaced three more real bugs beyond the earlier `scrollIntoViewIfNeeded`
+fix, diagnosed via throwaway diagnostic specs reusing `fixtures.js` (page.evaluate to read
+computed style / getBoundingClientRect / elementFromPoint, and manual string-length bisection):
+
+1. **Hover-transform vs. Playwright's click stability check.** `.ch-toolbar-swatch:hover {
+   transform: scale(1.2) }` grows the button's box on pointer-over, so Playwright's default
+   `.click()` (which waits for a stable bounding box) never converges and hangs until the test
+   timeout. Fixed with `.click({force: true})` on that one click.
+2. **Long input value wipes `document.body` on Houston Methodist specifically.** Typing a ~40+
+   character value into the capture popup's context-name field reliably removed the popup (and
+   apparently much more) within ~200ms — confirmed length-triggered, not content-triggered (an
+   em-dash wasn't the cause), and confirmed NOT caused by our own code (`removeChild`/`.remove()`
+   were monkey-patched and never fired). Almost certainly a page-side CMS/personalization script.
+   Fixed by typing a short constant ("E2E Test") instead of deriving the value from the full site
+   label.
+3. **Floated infobox breaks `getBoundingClientRect()`-based drag targeting on Wikipedia.** The
+   chemical-compound infobox floats right of the intro paragraph; the paragraph's own bounding
+   rect still spans the column width underneath the float (confirmed real per-browser behavior,
+   not a bug), so a drag to its bottom-right corner selected infobox text instead of the intended
+   paragraph. Fixed by building a `Range` over the paragraph's contents and using
+   `range.getClientRects()` (one rect per actually-rendered line) for the drag's start/end points
+   instead of the element's own box.
+
+All 9 E2E specs (5 from feature 28 + 4 from this feature) pass together, stable across repeated
+runs. `pnpm run build`, `pnpm run test` (Vitest), and `./init.sh` all green. Full detail recorded
+in `docs/research_e2e_highlight_reload_real_sites.md`, `docs/test_e2e_highlight_reload_real_sites.md`,
+and the `project_testing_strategy` memory entry.
+
+---
+
 _No sessions recorded yet._
 
 ---
@@ -317,3 +395,94 @@ de reabrir el ciclo completo del pipeline, al ser una revisión de calidad sobre
 
 **Pendiente**: la verificación manual en Chrome real (docs/test_highlight_persistence_robustness.md,
 V1–V9) sigue sin ejecutarse.
+
+---
+
+## Session 2026-07-29 — Feature #28: export_format_selector
+
+**Status:** done
+
+**Summary:** Reemplazado el botón único de descarga '.md' por un botón "Exportar" con menú
+desplegable, respaldado por un registro extensible de formatos (`EXPORT_FORMATS`) pensado para
+admitir futuros formatos (p.ej. ligados a una autenticación con Google) sin rediseñar la UI.
+Primera iteración: Markdown (sin cambios de comportamiento) + un nuevo export de tarjetas estilo
+Anki (TSV) generado desde `ctx.items` — una tarjeta Front/Back por item idea/argumento/evidencia
+(pregunta por subtítulo padre + categoría) y una tarjeta resumen por subtítulo con hijos.
+
+Pipeline completo: Interviewer (4 preguntas de clarificación) → Researcher
+(`docs/research_export_format_selector.md`) → Spec-Writer (`specs/028-spec-export_format_selector.json`)
+→ ⛔ aprobación humana → Tester (`docs/test_export_format_selector.md`, 24 casos) → Implementer → Reviewer.
+
+**Changes:**
+- `vite-extension/src/sidebar/export-formats.js` (nuevo): registro `EXPORT_FORMATS` (`markdown`,
+  `anki`) + `buildAnkiExport(ctx)` — genera filas Front/Back/Tags con cabecera
+  `#separator:tab`/`#html:false`/`#tags column:3`, escapando tabs/saltos de línea por campo.
+- `vite-extension/src/sidebar/export-menu.js` (nuevo): menú flotante mínimo (`createExportMenu()`),
+  mismo patrón de factory por closure que `history.js`/`find.js`. Navegación con flechas/Enter/Escape,
+  cierre por click-outside, sin memoria de la última selección (decisión explícita del usuario).
+- `vite-extension/src/sidebar.js`: `mdBtn`/`downloadMd` → botón "Exportar" (ícono Download + chevron)
+  + `downloadExport(ctx, formatId)`. Markdown conserva la resolución de buffer en vivo
+  (vista-edit/editor); los demás formatos leen `Store.getContext` fresco (ignoran cambios sin
+  guardar). `exportMenu.dispose()` en cada `renderHeader()` y en el estado vacío. Removido
+  `makeMdMark()` (glifo SVG "MD" ya no usado).
+- `vite-extension/src/sidebar.css`: nuevas reglas `.btn.export`, `.export-menu`,
+  `.export-menu-item`; removidas `.btn.md`/`.md-mark` (dead code tras el reemplazo del botón).
+
+No se modificó `storage.js` ni el contrato `buildMd`/`parseMd`. `pnpm run build` ✅ e `init.sh` ✅.
+
+**Pendiente**: verificación manual en Chrome real de los 24 casos de
+`docs/test_export_format_selector.md` (no ejecutada en esta sesión).
+
+**Addendum 2026-07-29 (misma sesión):** el usuario pidió automatizar la verificación con Vitest
+(ya instalado) en vez de una pasada manual en Chrome. Se siguió la convención de
+[[project_testing_strategy]] (node env para lógica pura, jsdom vía docblock solo donde se toca DOM,
+mocks a mano en vez de dependencias extra). Cambios:
+- `vite-extension/vitest.config.js` (nuevo, separado de `vite.config.js` para no arrastrar el
+  plugin CRXJS a los tests) + `"test": "vitest run"` en `package.json` + `jsdom` como devDependency.
+- `src/sidebar/export-formats.test.js` (13 tests, entorno node): header Anki, pregunta/respuesta
+  por item con y sin fuente, fallback a nombre de contexto y a label "Nota", tarjeta resumen de
+  subtítulo con hijos (y ausencia si no tiene hijos), escapado de tabs/saltos de línea, tags.
+- `src/sidebar/export-menu.test.js` (9 tests, entorno jsdom vía `@vitest-environment`): apertura/
+  cierre del menú, aria-expanded, click en ítem, toggle en el mismo/otro anchor, Escape,
+  navegación con flechas, click-outside, dispose().
+- Nota de implementación durante la escritura de tests: `pnpm install`/`pnpm add` fallaban por un
+  desajuste de store de pnpm (`node_modules` linkeado con pnpm v11, CLI activo v10) — se resolvió
+  con `CI=true pnpm install` (recreación no interactiva sugerida por el propio pnpm), sin tocar
+  lockfile ni dependencias de producción.
+- 25/25 tests pasan. `pnpm run build` e `init.sh` siguen en verde tras los cambios.
+- `docs/test_export_format_selector.md` actualizado con una sección que mapea qué TCs quedaron
+  cubiertos por Vitest vs. cuáles siguen siendo manuales (todo lo que depende del runtime real de
+  la extensión: chrome.storage.local persistido, side panel, temas, descarga real de archivo).
+
+**Addendum 2026-07-29 (corrección de convención, misma sesión):** el usuario corrigió la
+convención de colocation — los tests deben vivir en `vite-extension/tests/`, no junto al código
+fuente. Un archivo de test por módulo (no uno combinado por feature), prefijado con el id de tarea
+del harness. Se movieron `export-formats.test.js` → `tests/028-export-formats.test.js` y
+`export-menu.test.js` → `tests/028-export-menu.test.js` (imports ajustados a `../src/...`), se
+actualizó el `include` de `vitest.config.js` a `tests/**/*.test.js`, y se corrigió
+[[project_testing_strategy]] para reflejar la nueva regla. 25/25 tests, `pnpm run build` e
+`init.sh` en verde tras el cambio.
+
+**Addendum 2026-07-29 (capa E2E con Playwright, misma sesión):** el usuario había corrido el
+scaffold de Playwright por su cuenta (`playwright.config.js`, `tests/e2e/example.spec.js` default,
+`.gitignore`, `@playwright/test` instalado) y pidió cerrar la tarea con esa herramienta. Se
+escribió `tests/e2e/fixtures.js` (context/extensionId/page fixtures que cargan `dist/` real vía
+`chromium.launchPersistentContext` con `--load-extension`) y
+`tests/e2e/028-export-format-selector.spec.js` (5 tests: menú Exportar visible, descarga Markdown
+real, descarga Anki real, sin memoria de formato, tema oscuro aplica tokens reales) — reemplazando
+el `example.spec.js` placeholder. Se agregó `"test:e2e": "vite build && playwright test"` a
+`package.json` y se recortó `playwright.config.js` a un solo project `chromium` (firefox/webkit no
+aplican: las fixtures siempre lanzan Chromium directo).
+
+Dos bugs de entorno encontrados y resueltos durante la implementación:
+1. `import.meta.url` en `fixtures.js` rompía porque Playwright transpila `.js` planos a CJS salvo
+   que `package.json` tenga `"type":"module"` — se resolvió el path vía `process.cwd()` en su lugar.
+2. Los 5 tests colgaban indefinidamente (timeout esperando un service worker que nunca aparecía):
+   `headless: true` resuelve al binario `chrome-headless-shell`, que solo implementa el headless
+   **viejo** de Chromium — y ese modo no soporta cargar extensiones en absoluto (por eso existe el
+   headless "new"). Fix: `headless: false` — válido porque esta corre en una sesión de escritorio
+   real (Mac con WindowServer), no en un runner headless de CI.
+
+25 tests Vitest + 5 tests Playwright, `pnpm run build` e `init.sh` en verde. Se verificó que no
+quedaran procesos de Chrome huérfanos tras cada corrida. `docs/test_export_format_selector.md` y
+[[project_testing_strategy]] actualizados con la cobertura E2E y sus gotchas.
