@@ -137,6 +137,11 @@ export function createEditorController() {
     delete buffers[ctxId];
   }
 
+  /** True when ctxId is currently mounted and has unsaved/unsynced changes. */
+  function isDirty(ctxId) {
+    return ctxId === currentCtxId && !!tabDirtyEl && !tabDirtyEl.hidden;
+  }
+
   /**
    * Normalize the current document via parseMd → buildMd.
    * Uses Monaco's executeEdits so the operation participates in Monaco's
@@ -202,5 +207,5 @@ export function createEditorController() {
     });
   }
 
-  return { mount, flush, dispose, peek, invalidate, applyFormat };
+  return { mount, flush, dispose, peek, invalidate, isDirty, applyFormat };
 }

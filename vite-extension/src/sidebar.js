@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // Live-refresh from page saves, but not while editing (avoid clobbering).
-chrome.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== "local") return;
 
   // Navigate to context after a fast-save from the capture toolbar.
@@ -75,17 +75,42 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (!changes[Store.STORAGE_KEY]) return;
 
   // Detect items added externally (content script capture) and push an undo
-  // snapshot of the state that existed BEFORE the capture.
+  // snapshot of the state that existed BEFORE the capture. Also invalidate
+  // the Editor/Vista-edit buffers for affected contexts so a capture made
+  // from another tab/page shows up without the user having to switch modes —
+  // unless that mode currently has unsaved edits pending, to avoid clobbering.
   const oldCtxs = changes[Store.STORAGE_KEY].oldValue?.contexts || {};
   const newCtxs = changes[Store.STORAGE_KEY].newValue?.contexts || {};
+  let affectedSelected = false;
   for (const [id, newCtx] of Object.entries(newCtxs)) {
     const oldCtx = oldCtxs[id];
     if (oldCtx && newCtx.items.length > oldCtx.items.length) {
       historyMgr.push(id, serialize(oldCtx));
+      if (!editor.isDirty(id)) editor.invalidate(id);
+      if (id === selectedId) affectedSelected = true;
     }
   }
 
-  if (mode === "vista") render();
+  if (mode === "vista") {
+    render();
+    return;
+  }
+
+  contexts = await Store.listContexts();
+  if (!affectedSelected) return;
+
+  if (mode === "editor" && !editor.isDirty(selectedId)) {
+    await renderMain();
+  } else if (mode === "vista-edit" && !docEditor.isDirty(selectedId)) {
+    await renderMain();
+  } else {
+    const ctx = selectedContext();
+    const counter = ctxHeader.querySelector(".counter");
+    if (ctx && counter) {
+      const c = countItems(ctx);
+      counter.textContent = `${c.total} ítems · ${c.sub} subt · ${c.txt} txt`;
+    }
+  }
 });
 
 // =======================================================================

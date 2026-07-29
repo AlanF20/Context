@@ -486,3 +486,58 @@ Dos bugs de entorno encontrados y resueltos durante la implementación:
 25 tests Vitest + 5 tests Playwright, `pnpm run build` e `init.sh` en verde. Se verificó que no
 quedaran procesos de Chrome huérfanos tras cada corrida. `docs/test_export_format_selector.md` y
 [[project_testing_strategy]] actualizados con la cobertura E2E y sus gotchas.
+
+---
+
+## Session 2026-07-29 — Feature #30: editor_stale_buffer_cross_page
+
+**Status:** done
+
+**Summary:** Bug reportado por el usuario: con el side panel abierto en la pestaña Editor (Monaco)
+o en Vista-edit para un Contexto, una captura guardada desde OTRA página/pestaña (misma pestaña de
+Chrome, navegación secuencial) no aparecía — el panel seguía mostrando el contenido de antes de esa
+captura. Causa raíz (docs/research_editor_stale_buffer_cross_page.md): el listener
+`chrome.storage.onChanged` (sidebar.js:66-89) solo refrescaba (`render()`) en `mode === "vista"` y
+nunca invalidaba el buffer en memoria del Editor (`buffers[ctx.id]`, editor.js:49) ni remontaba
+Vista-edit; ese buffer siempre ganaba sobre datos frescos y solo se invalidaba en 3 flujos internos
+(borrar/renombrar/vista-edit sync), ninguno disparado por una escritura externa.
+
+**Alcance ampliado durante el gate de aprobación:** el usuario pidió incluir también Vista-edit
+(textarea inline), no solo el Editor Monaco — la spec y el fix cubren ambos modos.
+
+**Changes:**
+- `vite-extension/src/sidebar/editor.js`: nuevo método `isDirty(ctxId)` (true si `ctxId ===
+  currentCtxId` y el indicador visual de "sin guardar" está visible).
+- `vite-extension/src/sidebar/vista.js`: `dirtySignalled` elevado de variable local del listener
+  `input` a variable del controlador; nuevo método `isDirty(ctxId)`.
+- `vite-extension/src/sidebar.js`: el listener de `chrome.storage.onChanged` ahora, para cada
+  contexto con ítems nuevos detectados externamente, invalida el buffer del Editor si no está dirty;
+  refresca `contexts` incondicionalmente (ya no solo en modo vista); si el contexto afectado es el
+  abierto en Editor o Vista-edit y no tiene ediciones sin guardar pendientes, remonta ese modo en
+  vivo (`renderMain()`) para mostrar la captura sin que el usuario cambie de pestaña. Si hay
+  ediciones sin guardar, se preserva el trabajo en curso (comportamiento "anti-clobber" preexistente,
+  documentado como fuera de alcance su resolución de conflictos).
+- `vite-extension/tests/030-editor-vista-dirty.test.js` (nuevo, Vitest/jsdom): 10 tests cubriendo
+  `isDirty` en ambos controladores (antes de montar, recién montado, dirty, dirty de otro contexto,
+  tras dispose).
+
+**Verificación:** 35/35 tests Vitest en verde (10 nuevos + 25 preexistentes), `pnpm run build` sin
+errores, `./init.sh` en verde. Ver `docs/test_editor_stale_buffer_cross_page.md` para el plan de
+verificación manual completo (11 casos, incluyendo el repro original A→B en una sola pestaña).
+
+**Addendum (mismo día): cobertura E2E añadida a pedido del usuario.**
+`vite-extension/tests/e2e/030-editor-live-refresh.spec.js` (2 tests, Playwright contra el build real
+en `dist/`) reproduce el bug reportado sin depender de un sitio externo real: simula la "captura
+externa" llamando `chrome.storage.local.set()` desde el service worker de la extensión (mismo efecto
+que `addItem()` desde otra pestaña/página). Cubre: (1) Editor limpio + dos capturas externas
+sucesivas → ambas visibles en vivo sin cambiar de pestaña ni recargar (el repro original); (2) Editor
+con ediciones sin guardar → no se pisa. 6/6 corridas en verde, sin flakiness.
+
+**Hallazgo colateral:** al intentar automatizar el caso Vista-edit, se confirmó que el modo
+`"vista-edit"` (textarea inline, spec 018) **no tiene ningún punto de entrada en la UI actual** — el
+botón lápiz que lo activaba ya no existe en `renderHeader` y ningún otro código llama a
+`switchMode("vista-edit")` (0 resultados al grepear `src/`). Es código muerto alcanzable solo si algo
+externo invocara `switchMode` directamente. `docEditor.isDirty()` y la rama Vista-edit del fix siguen
+cubiertas a nivel Vitest, pero TC-04/TC-05 del plan de pruebas quedaron marcados como no verificables
+(ni manual ni E2E) hasta que se restaure un punto de entrada o se decida eliminar esa rama muerta.
+Detalle completo en `docs/test_editor_stale_buffer_cross_page.md`.

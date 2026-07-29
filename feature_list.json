@@ -447,6 +447,26 @@
       "spec_path": "specs/028-spec-export_format_selector.json",
       "dependencies": [],
       "status": "done"
+    },
+    {
+      "id": 30,
+      "name": "editor_stale_buffer_cross_page",
+      "title": "Fix: el Editor no muestra notas guardadas desde una página distinta a la última visitada",
+      "description": "Al capturar en el sitio A y guardar en un Contexto, y luego navegar (misma pestaña) al sitio B y capturar/guardar otra nota en el mismo Contexto, el Editor (Monaco) del side panel solo muestra el contenido de la última página visitada — la nota nueva guardada desde B no aparece. Se sospecha del buffer por contexto del editor y su invalidación (editor.invalidate) al recibir cambios de storage desde el content script en otra pestaña/página.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/030-spec-editor_stale_buffer_cross_page.json",
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": 31,
+      "name": "highlight_comment_capture",
+      "title": "Comentario del usuario al capturar un resaltado, mostrado como cita Markdown",
+      "description": "Añadir un input en el flujo de captura de resaltado para que el usuario escriba un comentario/anotación propia sobre el texto resaltado. El comentario se guarda junto al ítem y se muestra en la Vista bajo el texto resaltado usando el elemento de cita de Markdown (blockquote '>').",
+      "acceptance_criteria": [],
+      "spec_path": null,
+      "dependencies": [],
+      "status": "in_progress"
     }
   ],
   "evaluations": [

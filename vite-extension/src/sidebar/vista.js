@@ -63,6 +63,7 @@ export function createDocEditor() {
   let taRef = null;
   let onSaveRef = null;
   let onCleanRef = null;
+  let dirtySignalled = false;
 
   async function save(value, { onSync, onClean } = {}) {
     if (!currentCtxId) return;
@@ -93,7 +94,7 @@ export function createDocEditor() {
     mountEl.appendChild(ta);
     ta.focus();
 
-    let dirtySignalled = false;
+    dirtySignalled = false;
 
     ta.addEventListener("input", () => {
       if (!dirtySignalled) {
@@ -135,6 +136,7 @@ export function createDocEditor() {
     taRef = null;
     onSaveRef = null;
     onCleanRef = null;
+    dirtySignalled = false;
   }
 
   /** Current textarea value, or null when not mounted. */
@@ -142,5 +144,10 @@ export function createDocEditor() {
     return taRef ? taRef.value : null;
   }
 
-  return { mount, flush, dispose, getCurrentValue };
+  /** True when ctxId is currently mounted and has unsaved changes pending. */
+  function isDirty(ctxId) {
+    return ctxId === currentCtxId && dirtySignalled;
+  }
+
+  return { mount, flush, dispose, getCurrentValue, isDirty };
 }

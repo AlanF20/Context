@@ -1,0 +1,52 @@
+{
+  "id": 30,
+  "status": "implemented",
+  "createdAt": "2026-07-29",
+  "author": "Spec-Writer Agent",
+  "title": "Fix: el Editor (Monaco) y Vista-edit no reflejan capturas guardadas desde otra página mientras están abiertos",
+  "description": "Al tener el side panel en la pestaña Editor (Monaco) o en modo Vista-edit (textarea inline) para un Contexto X, si el usuario navega (misma pestaña de Chrome) a otra página y guarda ahí una nueva nota en el mismo Contexto X, ni el Editor ni Vista-edit la muestran. Causa raíz (docs/research_editor_stale_buffer_cross_page.md): el listener `chrome.storage.onChanged` en sidebar.js:66-89 solo refresca (`render()`) cuando `mode === \"vista\"`, y nunca invalida los buffers en memoria de Editor (`buffers[ctx.id]`, editor.js:49) ni el valor del textarea de Vista-edit (`taRef.value`, vista.js:87), que siempre ganan sobre datos frescos. Ambos solo se sincronizan en flujos internos disparados por el propio usuario (borrar/renombrar/flush al cambiar de pestaña), nunca por una escritura externa. El fix hace que el listener de `onChanged` invalide/refresque el modo activo (Editor o Vista-edit) para el contexto afectado — pero SOLO cuando ese modo no tiene cambios sin guardar pendientes para ese contexto, preservando el comportamiento deliberado actual de 'no clobbear' ediciones en curso (comentario en sidebar.js:65).",
+  "acceptance_criteria": [
+    "Con el side panel en modo Editor mostrando el Contexto X sin ediciones pendientes (buffer 'limpio'), si se guarda una nueva nota en X desde el content script de OTRA página/pestaña, el Editor la muestra automáticamente sin que el usuario tenga que cambiar de pestaña Vista↔Editor ni recargar el side panel.",
+    "Con el side panel en modo Vista-edit mostrando el Contexto X sin cambios sin guardar pendientes, si se guarda una nueva nota en X desde otra página/pestaña, el textarea de Vista-edit se actualiza automáticamente para incluirla.",
+    "El comportamiento se cumple tanto si el modo (Editor o Vista-edit) ya estaba activo cuando llega la captura externa, como si el usuario cambia a ese modo después.",
+    "Si el Editor o Vista-edit tienen cambios SIN GUARDAR pendientes para ese contexto (el usuario está tipeando activamente) cuando llega una captura externa, el buffer/textarea NO se invalida ni se pisa — se preserva el texto que el usuario está editando (no debe perder su trabajo en curso).",
+    "El contador de ítems en el rail/header se mantiene correcto tras una captura externa, sin importar el modo activo del panel en ese momento.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis."
+  ],
+  "implementation_plan": {
+    "files_to_edit": [
+      "vite-extension/src/sidebar/editor.js",
+      "vite-extension/src/sidebar/vista.js",
+      "vite-extension/src/sidebar.js"
+    ],
+    "changes": [
+      {
+        "file": "vite-extension/src/sidebar/editor.js",
+        "function": "createEditorController (nuevo método)",
+        "change": "Añadir un método `isDirty(ctxId)` al objeto retornado por `createEditorController()`. Se considera 'dirty' cuando `ctxId === currentCtxId` Y el estado visual del tab-dirty (`tabDirtyEl` no oculto) indica cambios sin guardar/sincronizar todavía. Basado en `tabDirtyEl && !tabDirtyEl.hidden` combinado con `ctxId === currentCtxId`, sin requerir tracking adicional de estado."
+      },
+      {
+        "file": "vite-extension/src/sidebar/vista.js",
+        "function": "createDocEditor (nuevo método)",
+        "change": "Añadir un método `isDirty(ctxId)` al objeto retornado por `createDocEditor()`. Elevar la variable local `dirtySignalled` (hoy closure interna del listener `input`, vista.js:96) a una variable del controlador (mismo nivel que `currentCtxId`/`taRef`) para poder leerla desde `isDirty()`. `isDirty(ctxId)` es true cuando `ctxId === currentCtxId && dirtySignalled === true`."
+      },
+      {
+        "file": "vite-extension/src/sidebar.js",
+        "function": "listener de chrome.storage.onChanged",
+        "change": "Dentro del bucle `for (const [id, newCtx] of Object.entries(newCtxs))` (sidebar.js:81-86), cuando `newCtx.items.length > oldCtx.items.length` (captura externa detectada): si `!editor.isDirty(id)`, llamar a `editor.invalidate(id)`. Después del bucle, refrescar `contexts = await Store.listContexts()` incondicionalmente (ya no solo dentro de `if (mode === \"vista\")`). Luego, según el modo activo: si `mode === \"vista\"`, mantener `render()` como hoy; si `mode === \"editor\" && selectedId === id && !editor.isDirty(id)`, llamar a `renderMain()` para remontar el editor con el `ctx` fresco; si `mode === \"vista-edit\" && selectedId === id && !docEditor.isDirty(id)`, llamar a `renderMain()` para remontar Vista-edit con el `ctx` fresco (recreará el textarea vía `docEditor.mount()` con `Store.buildMd(ctx)` actualizado)."
+      },
+      {
+        "file": "vite-extension/src/sidebar.js",
+        "function": "listener de chrome.storage.onChanged",
+        "change": "Refrescar también el contador de ítems en el header (mismo patrón que `afterEditorSync`/`afterDocEditorSync`) cuando el contexto afectado es el `selectedId` actual y no se remonta (porque hay cambios sin guardar pendientes en Editor o Vista-edit), para que el conteo no quede desactualizado."
+      }
+    ]
+  },
+  "out_of_scope": [
+    "Resolución de conflictos cuando el usuario SÍ tiene cambios sin guardar en Editor o Vista-edit y llega una captura externa (hoy: se ignora la captura externa hasta el próximo flush/invalidate, exactamente el comportamiento actual para 'no clobbear' — no se introduce merge ni aviso visual de 'hay cambios externos pendientes').",
+    "Refresco cuando el side panel estuvo suspendido/descargado por Chrome y se reactiva sin recibir el evento onChanged (mitigación por foco/visibilidad): no reportado por el usuario, posible mejora futura."
+  ],
+  "dependencies": [],
+  "research_path": "docs/research_editor_stale_buffer_cross_page.md"
+}
