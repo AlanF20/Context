@@ -459,14 +459,37 @@
       "status": "done"
     },
     {
+      "id": 32,
+      "name": "highlight_source_navigation",
+      "title": "Volver a la página de origen de un resaltado sin saturar la Vista de enlaces",
+      "description": "Permitir al usuario navegar desde una nota/resaltado en la Vista de vuelta a la página web donde se hizo el resaltado, evitando patrones que el usuario explícitamente no quiere: un enlace repetido por cada nota, o mostrar la URL cruda debajo de cada resaltado. Requiere un análisis de UX (Researcher) sobre cómo agrupar/exponer la navegación (p.ej. reutilizando la agrupación por sourceUrl del feature #2, un icono compacto por nota, o un encabezado de grupo clicable) antes de decidir el diseño final.",
+      "acceptance_criteria": [
+        "En la Vista, los ítems consecutivos que comparten el mismo sourceUrl no vacío se agrupan bajo un único encabezado de grupo con un botón ícono-only (sin texto de dominio ni URL visible en ningún momento).",
+        "El botón de grupo tiene aria-label y title con el hostname de la página (accesibilidad/tooltip), nunca impreso como texto visible en el documento.",
+        "Ítems con sourceUrl vacío (creados a mano desde el editor de documento completo) no muestran encabezado de grupo ni ícono, y se renderizan igual que hoy.",
+        "El modo de edición de documento completo (textarea de Markdown crudo) no muestra íconos ni URLs — el cambio es exclusivo del preview renderizado de la Vista.",
+        "buildMd, parseMd y el export .md no cambian su salida para ningún contexto existente (regresión cero en el contrato Markdown).",
+        "Al hacer click en el ícono de un grupo cuya sourceUrl ya está abierta en alguna pestaña de Chrome (en cualquier ventana), esa pestaña y su ventana se enfocan (no se abre una pestaña duplicada).",
+        "Al hacer click en el ícono de un grupo cuya sourceUrl no está abierta en ninguna pestaña, se abre una pestaña nueva con esa URL.",
+        "En ambos casos (pestaña existente o nueva), una vez que el resaltado del ítem queda anclado/pintado en la página, la vista hace scroll automático hasta él (scrollIntoView centrado).",
+        "Si el resaltado del ítem terminó en estado 'failed' (no se pudo reanclar porque el DOM de la página cambió), el click igual enfoca/abre la página sin error visible al usuario, simplemente sin el scroll automático.",
+        "El feature #2 (preview_group_by_page) en feature_list.json se marca como resuelto por el #32 al cerrar esta sesión.",
+        "pnpm run build y init.sh pasan sin errores.",
+        "Se agrega un spec E2E Playwright nuevo bajo vite-extension/tests/e2e/ que cubre: capturar en un sitio real, ver el ícono de grupo en la Vista, click, y verificar que se navega/enfoca la pestaña correcta (siguiendo el patrón de tests/e2e/029-highlight-reload-real-sites.spec.js)."
+      ],
+      "spec_path": "specs/032-spec-highlight_source_navigation.json",
+      "dependencies": [4, 25, 27],
+      "status": "in_progress"
+    },
+    {
       "id": 31,
       "name": "highlight_comment_capture",
       "title": "Comentario del usuario al capturar un resaltado, mostrado como cita Markdown",
       "description": "Añadir un input en el flujo de captura de resaltado para que el usuario escriba un comentario/anotación propia sobre el texto resaltado. El comentario se guarda junto al ítem y se muestra en la Vista bajo el texto resaltado usando el elemento de cita de Markdown (blockquote '>').",
       "acceptance_criteria": [],
-      "spec_path": null,
+      "spec_path": "specs/031-spec-highlight_comment_capture.json",
       "dependencies": [],
-      "status": "in_progress"
+      "status": "done"
     }
   ],
   "evaluations": [

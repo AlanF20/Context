@@ -135,6 +135,50 @@
 .ch-toolbar.ch-toolbar-success[data-success-cat="argument"] { background: #bcd3f5; border-color: #8ab4e8; }
 .ch-toolbar.ch-toolbar-success[data-success-cat="evidence"] { background: #bfe6c8; border-color: #8ecfa0; }
 
+/* "+ agregar comentario" link and its in-place mini-form (feature 031) */
+.ch-toolbar-success-comment {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.ch-toolbar-success-comment:hover { opacity: 0.75; }
+.ch-toolbar-comment-input {
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 6px;
+  font-family: var(--ui);
+  font-size: 12px;
+  padding: 4px 7px;
+  width: 150px;
+  max-width: 40vw;
+}
+.ch-toolbar-comment-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ch-toolbar-comment-save {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: 6px;
+  font-family: var(--ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ch-toolbar-comment-save:hover { opacity: 0.9; }
+
 /* ---- Capture popup ---- */
 .ch-pop {
   width: 340px;
@@ -370,6 +414,26 @@
   accent-color: var(--accent);
 }
 .ch-nest-sel:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Comment input row (feature 031) — one-line, optional, text categories only */
+.ch-comment-row { margin-bottom: 9px; }
+.ch-comment-row[hidden] { display: none; }
+.ch-comment-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: var(--ui);
+  color: var(--fg);
+  box-sizing: border-box;
+}
+.ch-comment-input::placeholder { color: var(--fg-3); }
+.ch-comment-input:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

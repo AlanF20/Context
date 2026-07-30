@@ -18,6 +18,49 @@
 
 ---
 
+## Session 2026-07-30 — Feature #31: highlight_comment_capture
+
+**Status:** done
+
+**Summary:** Added an optional comment on capture, only for text categories
+(idea/argumento/evidencia — never subtitles). Captured either from the full
+popup's one-line input, or after a fast-save via a "+ agregar comentario"
+link inside the "✓ Guardado" toast that morphs in-place into a mini-form. The
+comment persists as a Markdown blockquote (`> comentario`) directly under the
+item's own line, round-trips through `buildMd`/`parseMd`, appears in the
+Vista (reusing the pre-existing `.md blockquote` style — no new renderer
+needed) and in the Anki export's Back field.
+
+**Changes:**
+- `vite-extension/src/storage.js`: `addItem`/`updateItem` gain `comment`
+  (text items only); `buildMd` emits it as `> `-prefixed line(s);
+  `parseMd`'s blockquote handling now attaches an adjacent `>` block to the
+  immediately preceding text item as its comment, falling back to the legacy
+  "new item" behavior when there's no adjacent text item (hand-typed
+  Markdown); `replaceContextFromMarkdown` copies it through.
+- `vite-extension/src/content.js`: comment input row in the full popup
+  (hidden for "Título"); fast-save toast gains the comment link/mini-form
+  (no auto-dismiss while it's offered); `reclampToViewport()` + a `resize`
+  listener fix a real bug found during manual QA — the side panel shrinks the
+  page's own viewport (doesn't overlay it), which could leave the
+  toast/popup positioned beyond the new edge.
+- `vite-extension/src/content-storage.js`: resynced with `storage.js` — was
+  stale (a deliberate hand-maintained duplicate, not a re-export) and silently
+  dropped every comment before it reached storage. Found by the new E2E spec,
+  invisible to Vitest since it always imports `storage.js` directly.
+- `vite-extension/src/sidebar/export-formats.js`: Anki `back` gains a
+  `Comentario: ...` segment between the text and the source.
+- Tests: `tests/031-storage-comment.test.js`, `tests/031-export-formats-comment.test.js`
+  (Vitest), `tests/e2e/031-comment-capture.spec.js` (Playwright, real site).
+
+**Process note — new standing project requirement:** the user required, going
+forward, an E2E Playwright spec for every DOM-touching change, not
+manual-only verification (documented in `CLAUDE.md` § Testing and in memory).
+Writing feature 31's E2E spec is what caught the `content-storage.js` desync
+above — the concrete case for why the rule exists.
+
+---
+
 ## Session 2026-07-29 — Feature #29: e2e_highlight_reload_real_sites
 
 **Status:** done

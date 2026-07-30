@@ -1,0 +1,84 @@
+{
+  "id": 31,
+  "status": "implemented",
+  "createdAt": "2026-07-29",
+  "author": "Claude",
+  "title": "Comentario del usuario al capturar un resaltado, mostrado como cita Markdown",
+  "description": "Añadir un campo opcional de comentario en el popup completo de captura de resaltado (content.js), disponible solo para categorías de texto (idea/argumento/evidencia — no para subtítulos). El comentario se guarda en el item, se serializa en buildMd como una línea de cita Markdown ('> comentario') inmediatamente debajo del texto del item, y parseMd la reconstruye adjuntándola al item de texto inmediatamente anterior (no como un item nuevo). La Vista ya renderiza cualquier blockquote Markdown con el estilo existente '.md blockquote' (sidebar.css:319-324) dentro de renderVista/renderMarkdown, por lo que no hace falta CSS ni renderer nuevo para mostrarlo — se confirmó con una prueba manual de marked que un '>' inmediatamente después de un párrafo (sin línea en blanco) ya se parsea como blockquote independiente. Además, el guardado rápido de un clic (fastSave, sin popup) gana una vía secundaria para agregar comentario: el toast '✓ Guardado' que ya aparece tras un fast-save añade un link '+ agregar comentario' (solo si el item guardado es de tipo texto) que expande el propio toast en un mini-formulario de una línea, sin tocar ni añadir nada a la fila de swatches (decisión explícita del usuario para no restarle énfasis al guardado de un clic).",
+  "acceptance_criteria": [
+    "AC-01 [Input en el popup]: El popup completo de captura (popupSkeleton()/openPopup() en content.js) añade una fila con un <input type='text'> de una sola línea, placeholder 'Comentario (opcional)', ubicada después del select 'Anidar bajo' y antes del microcopy/acciones.",
+    "AC-02 [Visibilidad condicional]: La fila del comentario se oculta cuando la categoría activa es 'title' (mismo criterio que usa refreshNest() para el bloque .ch-nest: Store.typeForCategory(category) === 'text'), y se re-evalúa en el listener 'change' del select de categoría.",
+    "AC-03 [Opcional]: Guardar sin escribir nada en el input funciona igual que hoy (el campo comment del item queda null). El input nunca bloquea el guardado (no hay validación de requerido).",
+    "AC-04 [Fast-save — link post-guardado, no en los swatches]: La fila de swatches de la toolbar flotante no gana ningún elemento nuevo (mantiene su énfasis de guardado de un clic). En su lugar, showToolbarSuccess() (content.js:~303) — el toast '✓ Guardado' que ya se muestra tras un fast-save — añade un link secundario '+ agregar comentario' únicamente cuando el item recién guardado es type:'text' (nunca para subtítulos).",
+    "AC-04b [Sin auto-dismiss mientras el link está disponible]: El toast con el link '+ agregar comentario' NO tiene temporizador de auto-cierre (a diferencia del toast simple sin link, que conserva los 450 ms originales) — permanece visible hasta que el usuario lo cierre por alguna vía existente (clic fuera, Escape, scroll, o iniciar una nueva selección) o complete el flujo de comentario. Corrección post-QA: una ventana fija (~1800 ms) resultó insuficiente en la práctica.",
+    "AC-04e [Reposicionamiento en resize]: Si el usuario abre el side panel mientras el toast (o el popup completo) sigue visible, un listener de 'resize' en window reubica el elemento dentro de los nuevos límites del viewport (reclampToViewport()), evitando que el panel lateral (que reduce el ancho visible de la página, no la superpone) lo deje posicionado fuera del área visible. Corrección post-QA: el toast/popup quedaba con `left` calculado contra el viewport ANTES de abrir el panel y terminaba fuera de la vista.",
+    "AC-04c [Mini-formulario in-place]: Al hacer clic en '+ agregar comentario', el toast se transforma in-place en un mini-formulario de una línea (input + botón Guardar). Enter o clic en Guardar llama a Store.updateItem(contextId, itemId, { comment }) con el contextId/itemId del item recién fast-saved y remueve el toast al terminar. Escape o clic fuera del toast lo remueve sin guardar cambios.",
+    "AC-04d [updateItem soporta comment]: Store.updateItem(contextId, itemId, patch) (storage.js) acepta patch.comment (string u null); lo aplica solo si el item tiene type === 'text' (mismo criterio que addItem), recortando (trim) la cadena o guardando null si viene vacía.",
+    "AC-05 [Modelo de datos]: Store.addItem(contextId, opts) (storage.js) acepta opts.comment (string u undefined). El item guardado tiene un campo comment: string recortada (trim) o null. Si type !== 'text' (subtítulos), comment siempre es null independientemente de opts.comment.",
+    "AC-06 [buildMd — serialización]: Para un item type:'text' con comment no nulo, buildMd() empuja, inmediatamente después de la línea de texto del item (prefix+text o texto multi-línea) y sin línea en blanco intermedia, una o más líneas '> ' + cada línea del comentario (split por '\\n'). Items sin comment no ganan ninguna línea nueva (sin regresión para items existentes).",
+    "AC-07 [parseMd — nueva regla de adyacencia]: Un bloque de una o más líneas consecutivas que empiezan con '>' es tratado como el comment del item recién-parseado ANTERIOR únicamente cuando ese item es type:'text' y no hay línea en blanco ni otro tipo de línea entre ambos (adyacencia estricta). El comentario reconstruido es el join('\\n') de las líneas sin el prefijo '> '.",
+    "AC-08 [parseMd — fallback legado]: Si el bloque de líneas '>' aparece sin un item type:'text' inmediatamente anterior (p. ej. al inicio del documento, o justo tras un subtítulo o línea en blanco sin item de texto intermedio), se conserva el comportamiento actual: crear un item type:'text' nuevo con el contenido del blockquote (incluida la extracción de emoji de categoría en la primera línea), para no romper Markdown escrito a mano que ya dependa de este camino.",
+    "AC-09 [Round-trip]: parseMd(buildMd(ctx)) reconstruye el mismo comment (string) para cada item de texto que lo tenía, y null para los que no.",
+    "AC-10 [replaceContextFromMarkdown]: Store.replaceContextFromMarkdown() (usado por el editor Monaco y el textarea de documento completo de la Vista) copia it.comment al item reconstruido, de forma que editar el '> comentario' a mano en cualquiera de los dos editores persiste el cambio (satisface la necesidad de edición posterior sin UI dedicada).",
+    "AC-11 [Render en la Vista]: renderVista() sigue llamando a renderMarkdown(Store.buildMd(ctx)) sin cambios; el '<blockquote>' que produce marked para la línea '> comentario' hereda el estilo ya existente '.md blockquote' (sidebar.css:319-324) sin necesidad de nuevas reglas CSS ni de un renderer de blockquote custom.",
+    "AC-12 [Export Markdown]: El export '.md' (EXPORT_FORMATS, sidebar/export-formats.js, entrada 'markdown') incluye el comentario porque reutiliza Store.buildMd(ctx) sin cambios adicionales.",
+    "AC-13 [Export Anki]: buildAnkiRows() (sidebar/export-formats.js) añade el comentario al 'back' de la tarjeta cuando it.comment existe, como un segmento adicional separado por ' — ' (mismo separador que usa hoy para 'Fuente'), p. ej. '{texto} — Comentario: {comentario} — Fuente: {source}'. El orden es texto, comentario, fuente.",
+    "AC-14 [Sin regresión en items sin comentario]: Ningún item existente (o nuevo sin comentario) cambia su serialización, render o export respecto al comportamiento actual.",
+    "AC-15 [pnpm run build]: termina sin errores.",
+    "AC-16 [init.sh]: pasa sin errores de sintaxis."
+  ],
+  "files_changed": [
+    {
+      "path": "vite-extension/src/storage.js",
+      "changes": [
+        "addItem(): añadir opts.comment al objeto item (trim; null si type !== 'text' o si no se pasó).",
+        "buildMd(): tras la línea de texto de cada item type:'text', si item.comment existe, empujar línea(s) '> ' + cada línea del comentario, antes de la línea en blanco separadora del item.",
+        "parseMd(): reestructurar la máquina de estados de bloques '>' para que, cuando el item inmediatamente anterior (items[items.length-1]) sea type:'text' y no haya habido línea en blanco/otro tipo de línea entre medio, el bloque de líneas '>' se adjunte como comment de ese item en vez de crear un item nuevo; conservar el comportamiento legado (crear item nuevo) en cualquier otro caso.",
+        "replaceContextFromMarkdown(): copiar it.comment al item reconstruido (hoy no lo hace).",
+        "updateItem(): aceptar patch.comment (string u null), aplicándolo solo si item.type === 'text' (AC-04d)."
+      ]
+    },
+    {
+      "path": "vite-extension/src/content.js",
+      "changes": [
+        "popupSkeleton(): añadir fila '.ch-comment-row' con input '.ch-comment-input' data-role='comment-input', tras el bloque '.ch-nest'.",
+        "openPopup(): capturar els.commentRow/els.commentInput; ocultar/mostrar la fila según Store.typeForCategory(category) === 'text' (mismo criterio que refreshNest, re-evaluado en el listener change del select de categoría junto a refreshNest()); en doSave(), leer y recortar el valor del input y pasarlo como opts.comment a Store.addItem solo si la categoría es de tipo texto y el valor no está vacío.",
+        "fastSave(ctx, category): pasar el savedItem y ctx.id a showToolbarSuccess() para que el toast sepa qué item/contexto parchear si el usuario agrega comentario.",
+        "showToolbarSuccess(category, item, contextId): si item.type === 'text', añadir botón '+ agregar comentario' junto al '✓ Guardado' y NO programar auto-dismiss (AC-04b); si no, conservar el timeout original de 450ms. Clic en el link expande el toast en el mini-formulario (AC-04c) — nueva función expandToastToCommentForm(toastEl, contextId, itemId) que crea el input + botón Guardar y cablea Enter/click→Store.updateItem(...)+teardown (Escape/click-fuera/scroll/nueva selección ya cierran el toast vía los listeners globales existentes, sin lógica adicional).",
+        "reclampToViewport(el) (nueva función) + listener 'resize' en window: reubica toolbarEl/popEl dentro del viewport vigente tras abrir el side panel (AC-04e)."
+      ]
+    },
+    {
+      "path": "vite-extension/src/content.css",
+      "changes": [
+        "Estilos para '.ch-comment-row' y '.ch-comment-input' del popup completo, consistentes con los tokens ch- existentes (mismo tratamiento visual que '.ch-nest-sel' / '.ch-combo-input': fondo, borde, radio, padding, focus-visible, overrides de tema claro/oscuro heredados de .ch-root).",
+        "Estilos para el link '.ch-toolbar-success-comment' dentro del toast y el mini-formulario expandido ('.ch-toolbar-comment-form', input + botón Guardar compactos), igualmente con overrides claro/oscuro."
+      ]
+    },
+    {
+      "path": "vite-extension/src/sidebar/export-formats.js",
+      "changes": [
+        "buildAnkiRows(): incluir it.comment en el 'back' de la tarjeta cuando exista, como segmento 'Comentario: {comentario}' entre el texto y la fuente."
+      ]
+    },
+    {
+      "path": "vite-extension/src/content-storage.js",
+      "changes": [
+        "Corrección post-QA (2026-07-30): resincronizado con storage.js (cp storage.js content-storage.js + restaurar su header). Estaba desactualizado desde el inicio de esta feature — content.js llamaba a un addItem/updateItem/buildMd/parseMd sin el campo comment, por lo que el comentario se descartaba en silencio antes de llegar a storage. Detectado únicamente por el spec E2E nuevo (tests/e2e/031-comment-capture.spec.js), no por Vitest (que importa storage.js directo, nunca la copia)."
+      ]
+    },
+    {
+      "path": "vite-extension/tests/e2e/031-comment-capture.spec.js",
+      "changes": [
+        "Nuevo spec Playwright (requisito post-QA, ver CLAUDE.md § Testing): input de comentario en el popup completo + su render como blockquote en la Vista; toast de fast-save con/sin '+ agregar comentario' según tipo de item y guardado vía el mini-formulario; reubicación del toast/popup dentro del viewport tras un resize (AC-04e)."
+      ]
+    }
+  ],
+  "dependencies": [],
+  "out_of_scope": [
+    "UI dedicada y persistente para editar o borrar el comentario de un item antiguo (fuera de la ventana efímera del toast post-fast-save de AC-04c). La única vía duradera de edición posterior es el Markdown crudo en el Editor Monaco o el textarea de documento completo de la Vista, vía el round-trip parseMd/buildMd — AC-10.",
+    "Comentarios en items type:'subtitle', en cualquiera de los dos caminos de guardado (popup completo o fast-save).",
+    "Un renderer de blockquote custom o clases CSS nuevas para el comentario en la Vista — se confirmó que el estilo '.md blockquote' existente ya aplica correctamente.",
+    "Atajos de teclado nuevos o cambios al flujo de Enter=Guardar / Escape=Cancelar del popup."
+  ]
+}

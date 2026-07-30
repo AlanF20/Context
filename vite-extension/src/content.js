@@ -154,6 +154,16 @@ window.addEventListener(
   true
 );
 
+// Opening the side panel shrinks the page's own viewport (it's a docked
+// panel, not an overlay) — a toolbar/popup already positioned in fixed
+// pixels can end up beyond the new, narrower viewport and appear to just
+// vanish. Re-clamp whichever is currently shown back into view (feature 031
+// fix) instead of leaving positioning frozen at selection time.
+window.addEventListener("resize", () => {
+  reclampToViewport(toolbarEl);
+  reclampToViewport(popEl);
+});
+
 function isOwnUi(node) {
   return !!(node && node.closest && node.closest(".ch-root"));
 }
@@ -293,26 +303,91 @@ async function fastSave(ctx, category) {
     // item there would attribute it to the wrong page (spec 027 review).
     if (location.href === capturedUrl) highlightSavedRange(category, savedItem);
     chrome.runtime.sendMessage({ type: 'CH_OPEN_PANEL_CTX', ctxId: ctx.id }).catch(() => {});
-    showToolbarSuccess(category);
+    showToolbarSuccess(category, savedItem, ctx.id);
   } catch (err) {
     console.error('[CH] fast-save error:', err);
     removeToolbar();
   }
 }
 
-function showToolbarSuccess(category) {
+const TOAST_DISMISS_MS = 450;
+
+/**
+ * Show the post-fast-save "✓ Guardado" toast. When the saved item is a text
+ * item (idea/argumento/evidencia — never a subtitle), it also offers a
+ * "+ agregar comentario" link that morphs the same toast in-place into a
+ * one-line comment form (feature 031), without touching the swatch row.
+ */
+function showToolbarSuccess(category, item, contextId) {
   if (!toolbarEl) return;
   const el = toolbarEl;
   el.classList.add('ch-toolbar-success');
   el.dataset.successCat = category;
-  el.innerHTML = '<span class="ch-toolbar-success-text">✓ Guardado</span>';
+
+  const canComment = !!(item && item.type === 'text');
+  el.innerHTML = canComment
+    ? '<span class="ch-toolbar-success-text">✓ Guardado</span>' +
+      '<button class="ch-toolbar-success-comment" type="button">+ agregar comentario</button>'
+    : '<span class="ch-toolbar-success-text">✓ Guardado</span>';
+
   // Capture the element instead of relying on the (possibly reassigned) global:
-  // a new selection within this timeout would swap toolbarEl to a fresh
-  // toolbar, and removeToolbar() would close that one instead of this toast.
-  setTimeout(() => {
+  // a new selection would swap toolbarEl to a fresh toolbar, and
+  // removeToolbar() would close that one instead of this toast.
+  function dismiss() {
     if (el.parentNode) el.parentNode.removeChild(el);
     if (toolbarEl === el) toolbarEl = null;
-  }, 450);
+  }
+
+  if (canComment) {
+    // No auto-dismiss timer here: the user gets as long as they need to
+    // notice and click "+ agregar comentario" (and, once expanded, as long
+    // as they need to type). It's still closed by every existing teardown
+    // path — outside click, Escape, scroll, or making a new selection.
+    el.querySelector('.ch-toolbar-success-comment').addEventListener('click', (e) => {
+      e.stopPropagation();
+      expandToastToCommentForm(el, contextId, item.id, dismiss);
+    });
+  } else {
+    setTimeout(dismiss, TOAST_DISMISS_MS);
+  }
+}
+
+/**
+ * Morph a fast-save success toast into a one-line comment input in-place
+ * (feature 031). Escape / click-outside already dismiss it without saving —
+ * both paths already tear down `toolbarEl` (the toast IS the toolbar element,
+ * just with its innerHTML swapped), via the pre-existing global mousedown
+ * listener and the toolbar's own keydown listener. Only the save path (Enter
+ * or the button) needs wiring here.
+ */
+function expandToastToCommentForm(toastEl, contextId, itemId, dismiss) {
+  toastEl.innerHTML =
+    '<input class="ch-toolbar-comment-input" type="text" placeholder="Comentario…" />' +
+    '<button class="ch-toolbar-comment-save" type="button">Guardar</button>';
+  const input = toastEl.querySelector('.ch-toolbar-comment-input');
+  const saveBtn = toastEl.querySelector('.ch-toolbar-comment-save');
+
+  async function save() {
+    const comment = input.value.trim();
+    try {
+      if (comment) await Store.updateItem(contextId, itemId, { comment });
+    } catch (err) {
+      console.error('[CH] comment save error:', err);
+    }
+    dismiss();
+  }
+
+  saveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    save();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      save();
+    }
+  });
+  input.focus();
 }
 
 function removeToolbar() {
@@ -370,6 +445,11 @@ function popupSkeleton() {
       <select class="ch-nest-sel" data-role="nest-select" id="ch-nest-sel"></select>
     </div>
 
+    <div class="ch-comment-row" data-role="comment-row" hidden>
+      <input class="ch-comment-input" data-role="comment-input" type="text"
+             placeholder="Comentario (opcional)" autocomplete="off" />
+    </div>
+
     <div class="ch-microcopy" data-role="microcopy"></div>
 
     <div class="ch-actions">
@@ -400,6 +480,8 @@ async function openPopup(rect, initialCategory = 'idea') {
     catSelect: popEl.querySelector('[data-role="cat-select"]'),
     nest: popEl.querySelector('[data-role="nest"]'),
     nestSelect: popEl.querySelector('[data-role="nest-select"]'),
+    commentRow: popEl.querySelector('[data-role="comment-row"]'),
+    commentInput: popEl.querySelector('[data-role="comment-input"]'),
     microcopy: popEl.querySelector('[data-role="microcopy"]'),
     cancel: popEl.querySelector('[data-role="cancel"]'),
     save: popEl.querySelector('[data-role="save"]'),
@@ -468,6 +550,7 @@ async function openPopup(rect, initialCategory = 'idea') {
 
   async function refreshNest() {
     const isText = Store.typeForCategory(category) === "text";
+    els.commentRow.hidden = !isText;
     if (!isText || !selectedCtx) {
       els.nest.hidden = true;
       return;
@@ -588,6 +671,7 @@ async function openPopup(rect, initialCategory = 'idea') {
         isText && els.nestSelect && els.nestSelect.value
           ? els.nestSelect.value
           : null;
+      const comment = isText && els.commentInput ? els.commentInput.value.trim() : null;
       const { rangePrefix, rangeSuffix, rangeStart, rangeEnd } = extractRangeContext(savedRange);
       const savedItem = await Store.addItem(ctx.id, {
         text: savedText,
@@ -599,6 +683,7 @@ async function openPopup(rect, initialCategory = 'idea') {
         rangeStart,
         rangeEnd,
         rangeText: savedRawText !== savedText ? savedRawText : null,
+        comment,
       });
       // See fastSave: a navigation during the awaits above must not attribute
       // this item's live paint/anchor to whatever page loaded in the meantime.
@@ -1136,4 +1221,26 @@ function position(el, rect) {
     el.style.top = Math.round(top) + "px";
     el.style.visibility = "visible";
   });
+}
+
+/**
+ * Nudge an already-positioned floating element back inside the current
+ * viewport bounds, in place — used on window "resize" (see top of file) so
+ * opening the side panel (which shrinks the page viewport) can't leave a
+ * toolbar/popup sitting beyond the new right edge.
+ */
+function reclampToViewport(el) {
+  if (!el) return;
+  const margin = 8;
+  const rect = el.getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.top;
+  const maxLeft = window.innerWidth - rect.width - margin;
+  if (left > maxLeft) left = Math.max(margin, maxLeft);
+  if (left < margin) left = margin;
+  const maxTop = window.innerHeight - rect.height - margin;
+  if (top > maxTop) top = Math.max(margin, maxTop);
+  if (top < margin) top = margin;
+  el.style.left = Math.round(left) + "px";
+  el.style.top = Math.round(top) + "px";
 }

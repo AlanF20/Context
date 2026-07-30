@@ -67,7 +67,13 @@ function buildAnkiRows(ctx) {
       const front = parentText
         ? `¿Qué ${label} se capturó sobre "${parentText}"?`
         : `¿Qué ${label} se capturó en ${ctx.name}?`;
-      const back = it.source ? `${it.text} — Fuente: ${it.source}` : it.text;
+      const back = [
+        it.text,
+        it.comment ? `Comentario: ${it.comment}` : null,
+        it.source ? `Fuente: ${it.source}` : null,
+      ]
+        .filter(Boolean)
+        .join(" — ");
       const tags = [it.category, it.source ? sanitizeTag(it.source) : null, ctxTag]
         .filter(Boolean)
         .join(" ");

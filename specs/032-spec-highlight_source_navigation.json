@@ -1,0 +1,23 @@
+{
+  "id": 32,
+  "status": "approved",
+  "createdAt": "2026-07-30T15:20:02Z",
+  "author": "Spec-Writer",
+  "title": "Volver a la página de origen de un resaltado desde la Vista",
+  "description": "Añadir en la Vista un único control de navegación (ícono, sin texto de dominio ni URL) por cada racha de notas consecutivas que comparten sourceUrl, agrupando las notas por página de origen (absorbiendo el feature #2 pendiente 'preview_group_by_page'). Al hacer click, el panel enfoca la pestaña donde ya está abierta esa URL, o abre una pestaña nueva si no lo está, y en ambos casos hace scroll automático hasta el resaltado exacto en la página reutilizando la infraestructura de anclaje existente (features #4/#25/#27). No se modifica buildMd/parseMd/export .md: es un cambio de render de la Vista + un nuevo canal de mensajería panel↔content script.",
+  "acceptance_criteria": [
+    "En la Vista, los ítems consecutivos que comparten el mismo sourceUrl no vacío se agrupan bajo un único encabezado de grupo con un botón ícono-only (sin texto de dominio ni URL visible en ningún momento).",
+    "El botón de grupo tiene aria-label y title con el hostname de la página (accesibilidad/tooltip), nunca impreso como texto visible en el documento.",
+    "Ítems con sourceUrl vacío (creados a mano desde el editor de documento completo) no muestran encabezado de grupo ni ícono, y se renderizan igual que hoy.",
+    "El modo de edición de documento completo (textarea de Markdown crudo) no muestra íconos ni URLs — el cambio es exclusivo del preview renderizado de la Vista.",
+    "buildMd, parseMd y el export .md no cambian su salida para ningún contexto existente (regresión cero en el contrato Markdown).",
+    "Al hacer click en el ícono de un grupo cuya sourceUrl ya está abierta en alguna pestaña de Chrome (en cualquier ventana), esa pestaña y su ventana se enfocan (no se abre una pestaña duplicada).",
+    "Al hacer click en el ícono de un grupo cuya sourceUrl no está abierta en ninguna pestaña, se abre una pestaña nueva con esa URL.",
+    "En ambos casos (pestaña existente o nueva), una vez que el resaltado del ítem queda anclado/pintado en la página, la vista hace scroll automático hasta él (scrollIntoView centrado).",
+    "Si el resaltado del ítem terminó en estado 'failed' (no se pudo reanclar porque el DOM de la página cambió), el click igual enfoca/abre la página sin error visible al usuario, simplemente sin el scroll automático.",
+    "El feature #2 (preview_group_by_page) en feature_list.json se marca como resuelto por el #32 al cerrar esta sesión.",
+    "pnpm run build y init.sh pasan sin errores.",
+    "Se agrega un spec E2E Playwright nuevo bajo vite-extension/tests/e2e/ que cubre: capturar en un sitio real, ver el ícono de grupo en la Vista, click, y verificar que se navega/enfoca la pestaña correcta (siguiendo el patrón de tests/e2e/029-highlight-reload-real-sites.spec.js)."
+  ],
+  "dependencies": [4, 25, 27]
+}

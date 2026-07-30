@@ -35,6 +35,40 @@ Documento fuente de diseño: `../DESIGN_SPEC.md` (referencia visual:
   Dependencias pesadas opcionales (Monaco) siguen vendored en `public/vendor/`.
 - Idioma de la UI: español. Comentarios de código: inglés (consistencia actual).
 
+## Testing (OBLIGATORIO)
+
+`vite-extension/` tiene dos suites en `tests/`:
+
+- **Vitest** (`tests/*.test.js`, `pnpm run test`): lógica pura (`storage.js`
+  `buildMd`/`parseMd`, `sidebar/export-formats.js`, etc.) y funciones que
+  llaman a `chrome.storage.local` vía un mock hand-rolled en memoria (sin
+  dependencias como sinon-chrome). Nombrado: `NNN-modulo.test.js` (NNN = id de
+  la feature que lo origina).
+- **Playwright** (`tests/e2e/*.spec.js`, `pnpm run test:e2e`): carga la
+  extensión real construida en `dist/` en un Chromium con perfil persistente
+  (`headless: false` — el modo headless no puede cargar extensiones). Cubre lo
+  que Vitest/jsdom no puede: `chrome.storage.local` real, DOM real, selección
+  de texto real vía `page.mouse`, descargas reales.
+
+**Regla dura: todo cambio que toque el DOM (`content.js`, cualquier UI nueva,
+`resize`/`scroll`/eventos reales del navegador) lleva un spec E2E nuevo bajo
+`tests/e2e/`, no solo una pasada manual en Chrome.** La verificación manual
+sigue siendo necesaria, pero deja de ser suficiente por sí sola para dar por
+cerrado un cambio de DOM. Reusar la técnica de selección por arrastre de
+`tests/e2e/029-highlight-reload-real-sites.spec.js` +
+`tests/e2e/fixtures/test-sites.js` para exercitar `content.js` contra un
+sitio real (el content script no reacciona a `Selection` vía JS, solo a un
+`mouseup` nativo).
+
+Motivo (no es un capricho): `content.js` importa desde `content-storage.js`
+— una copia manual completa de `storage.js`, no un re-export — porque Rollup
+extraería un chunk compartido que Chrome ejecuta como *web accessible
+resource* sin acceso a `chrome.storage`. Un cambio en `storage.js` que olvide
+resincronizar `content-storage.js` (`cp storage.js content-storage.js`,
+restaurando su propio header) es invisible para Vitest, que siempre importa
+`storage.js` directo vía `sidebar/store.js` — solo un E2E real que pase por el
+content script de verdad lo detecta. Esto ya pasó una vez (feature 31).
+
 ## Restricciones MV3 que hay que respetar
 
 - **No remote code en runtime**: nada de `<script src="https://cdn...">`, ni
@@ -63,7 +97,7 @@ Documento fuente de diseño: `../DESIGN_SPEC.md` (referencia visual:
 | `manifest.json` | ✅ | MV3 (gestionado por CRXJS): permisos `storage`+`sidePanel`, host `<all_urls>`, content script, side panel, service worker. |
 | `src/background.js` | ✅ | Service worker; abre el side panel al click del icono. |
 | `src/storage.js` | ✅ | Capa de datos sobre `chrome.storage.local`. Módulo ES con exports nombrados: modelo, `buildMd`/`parseMd`, categorías de color. |
-| `src/content-storage.js` | ✅ | Re-exporta lo necesario de `storage.js` para el content script (subset sin Monaco/marked). |
+| `src/content-storage.js` | ✅ | Copia manual **completa** de `storage.js` para el content script (Rollup extraería un chunk compartido que Chrome ejecuta como WAR sin acceso a `chrome.storage`). **Debe resincronizarse a mano** (`cp storage.js content-storage.js`, luego restaurar el header propio del archivo) cada vez que cambie `storage.js` — un desincronizado no lo detecta Vitest (importa `storage.js` directo), solo un E2E real. |
 | `src/content.js` | ✅ | Content script (IIFE clásico): selección → icono `+` → popup de captura (combobox de contexto, 4 categorías de color, anidar, Enter guarda) → resaltado en la página. |
 | `src/content.css` | ✅ | Estilos del popup/icono/resaltado, scoped en `.ch-root`. Highlight por categoría: `.ch-hl-{title,idea,argument,evidence}`. |
 | `src/sidebar.html` | ✅ | Solo estructura: rail + main. `<link>` a `sidebar.css`, `<script type="module">` a `sidebar.js`. |
@@ -109,8 +143,6 @@ Documento fuente de diseño: `../DESIGN_SPEC.md` (referencia visual:
   (chocan con escribir el nombre del contexto en el combobox).
 - **Highlights no persisten** ni se re-aplican al recargar la página (solo se
   marcan al guardar).
-- **Sin tests automatizados.** Verificación = `pnpm run build` (compila todo) +
-  revisión manual en Chrome cargando `vite-extension/dist/`.
 - **Resaltado de sintaxis Markdown a medida** (overlay spec §2.4): se usa Monaco.
 - **`outputs/` congelado**: las features 1–12 están implementadas ahí, pero no
   recibirá más cambios. Toda feature nueva va a `vite-extension/`.
@@ -145,8 +177,11 @@ flujo es obligatorio y no tiene atajos.
 8. **Tester** — escribir el plan de verificación en `docs/test_<feature>.md`.
 9. **Implementer** — editar los archivos en `vite-extension/src/` según la spec
    aprobada. No tocar `outputs/` (legado congelado).
-10. **Reviewer** — correr `./init.sh` + `pnpm run build` dentro de
-    `vite-extension/`; todos los checks deben salir verdes.
+10. **Reviewer** — correr `./init.sh` + `pnpm run build` + `pnpm run test`
+    dentro de `vite-extension/`; todos los checks deben salir verdes. Si la
+    feature tocó el DOM, correr también `pnpm run test:e2e` con un spec nuevo
+    bajo `tests/e2e/` (ver sección "Testing" arriba) — manual-only ya no
+    cierra un cambio de DOM.
 11. **Cerrar sesión** — copiar `progress/current.md` a `progress/history.md`,
     resetear `current.md` a la plantilla base, marcar la feature como `done` en
     `feature_list.json`.
@@ -165,6 +200,9 @@ flujo es obligatorio y no tiene atajos.
 ## Cómo verificar
 - **Build**: `cd vite-extension && pnpm run build` — debe terminar sin errores.
 - **Dev**: `pnpm run dev` — compila con HMR; útil para iterar rápido.
+- **Unit**: `pnpm run test` (Vitest) — debe pasar en verde.
+- **E2E**: `pnpm run test:e2e` (Playwright, hace build primero) — obligatorio
+  si el cambio toca el DOM (ver sección "Testing" arriba).
 - **Sintaxis** (fallback rápido sin build): `node --check archivo.js` para scripts clásicos; copiar a `*.mjs` para ESM.
 - **Harness**: `./init.sh` desde la raíz del repo.
-- **Manual**: cargar `vite-extension/dist/` como carpeta sin empaquetar en `chrome://extensions` (Developer mode).
+- **Manual**: cargar `vite-extension/dist/` como carpeta sin empaquetar en `chrome://extensions` (Developer mode) — sigue siendo necesario, pero ya no sustituye al E2E para cambios de DOM.

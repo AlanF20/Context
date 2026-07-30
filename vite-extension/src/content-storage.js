@@ -196,6 +196,7 @@ export async function listSubtitles(contextId) {
  * @param {string|null} [opts.rangeSuffix]  — up to 50 chars after the selection (TextQuoteSelector)
  * @param {number|null} [opts.rangeStart]   — selection start offset over the page text (TextPositionSelector)
  * @param {number|null} [opts.rangeEnd]     — selection end offset over the page text (TextPositionSelector)
+ * @param {string|null} [opts.comment]      — user's own annotation, text items only
  * @returns {Promise<object>} the saved item
  */
 export async function addItem(contextId, opts) {
@@ -220,6 +221,7 @@ export async function addItem(contextId, opts) {
       type === "text" && opts.linkedSubtitleId ? opts.linkedSubtitleId : null,
     source: opts.source || hostnameFromUrl(sourceUrl),
     sourceUrl,
+    comment: type === "text" && opts.comment ? String(opts.comment).trim() || null : null,
     createdAt: Date.now(),
     rangePrefix: opts.rangePrefix != null ? String(opts.rangePrefix).slice(0, 50) : null,
     rangeSuffix: opts.rangeSuffix != null ? String(opts.rangeSuffix).slice(0, 50) : null,
@@ -301,6 +303,10 @@ export async function updateItem(contextId, itemId, patch) {
       item.type === "text" && id && id !== item.id ? id : null;
   }
 
+  if ("comment" in patch && item.type === "text") {
+    item.comment = patch.comment ? String(patch.comment).trim() || null : null;
+  }
+
   await writeAll(data);
   return item;
 }
@@ -360,6 +366,7 @@ export async function replaceContextFromMarkdown(contextId, md) {
     linkedSubtitleId: null,
     source: it.source || "",
     sourceUrl: "",
+    comment: it.type === "text" ? it.comment || null : null,
     createdAt: Date.now(),
     // Anchoring metadata is DOM-position data that Markdown cannot carry;
     // editor-created items are explicitly not re-anchorable (spec 004/027).
@@ -441,7 +448,16 @@ export function buildMd(ctx) {
       // Multi-line items (captured Markdown lists): omit the emoji prefix so
       // list markers (- / 1.) remain at the start of each line and are parsed
       // correctly by Markdown renderers. Category is preserved in storage.
-      lines.push(it.text.includes("\n") ? it.text : prefix + it.text, "");
+      lines.push(it.text.includes("\n") ? it.text : prefix + it.text);
+      // The comment rides directly under the item's own line (no blank line
+      // between them) so parseMd's adjacency rule (see below) can attach it
+      // back to this same item instead of reading it as a new one.
+      if (it.comment) {
+        for (const commentLine of it.comment.split("\n")) {
+          lines.push("> " + commentLine);
+        }
+      }
+      lines.push("");
     }
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
@@ -456,26 +472,36 @@ export const exportContextToMarkdown = buildMd;
  *   "# …"           -> name
  *   "## …" / "### …" -> { type:'subtitle', text }
  *   "_Fuente: X_"   -> attaches source to the LAST text item
+ *   "> …" right after a text item's own line (no blank line between) -> the
+ *                      user's comment on THAT item (feature 031); a "> …"
+ *                      block with no adjacent text item falls back to the
+ *                      legacy behavior of starting its own new text item
+ *                      (hand-typed Markdown pre-dating this feature)
  *   any other line  -> { type:'text', text }
  */
 export function parseMd(md) {
   let name = null;
   const items = [];
   let inBlockquote = false;
+  let blockquoteMode = null; // 'comment' | 'legacy' — only meaningful while inBlockquote
+  let lastWasTextLine = false; // true right after pushing a plain (non-quoted) text item
 
   for (const raw of String(md || "").split("\n")) {
     const line = raw.trim();
     if (!line) {
       inBlockquote = false;
+      lastWasTextLine = false;
       continue;
     }
 
     const fuente = line.match(/^_Fuente:\s*(.+?)_$/i);
     if (/^#\s+/.test(line)) {
       inBlockquote = false;
+      lastWasTextLine = false;
       name = line.replace(/^#\s+/, "").trim();
     } else if (/^#{2,6}\s+/.test(line)) {
       inBlockquote = false;
+      lastWasTextLine = false;
       items.push({
         type: "subtitle",
         category: "title",
@@ -483,6 +509,7 @@ export function parseMd(md) {
       });
     } else if (fuente) {
       inBlockquote = false;
+      lastWasTextLine = false;
       for (let i = items.length - 1; i >= 0; i--) {
         if (items[i].type === "text") {
           items[i].source = fuente[1].trim();
@@ -490,28 +517,45 @@ export function parseMd(md) {
         }
       }
     } else if (/^>/.test(line)) {
-      // GFM blockquote line — part of a multi-line item (e.g. a captured list).
       const bqText = line.replace(/^>\s*/, "");
       if (!inBlockquote) {
-        // First line: extract category from emoji prefix.
-        let text = bqText;
-        let category = null;
-        for (const emoji of Object.keys(EMOJI_TO_CAT)) {
-          if (text.startsWith(emoji)) {
-            category = EMOJI_TO_CAT[emoji];
-            text = text.slice(emoji.length).trim();
-            break;
+        const last = items[items.length - 1];
+        if (lastWasTextLine && last && last.type === "text") {
+          // Adjacent to a text item's own line -> this is its comment.
+          last.comment = bqText;
+          blockquoteMode = "comment";
+        } else {
+          // Legacy path (no buildMd output takes this shape anymore): a
+          // blockquote with no adjacent text item starts its own new item,
+          // extracting category from an emoji prefix like plain lines do.
+          let text = bqText;
+          let category = null;
+          for (const emoji of Object.keys(EMOJI_TO_CAT)) {
+            if (text.startsWith(emoji)) {
+              category = EMOJI_TO_CAT[emoji];
+              text = text.slice(emoji.length).trim();
+              break;
+            }
           }
+          items.push({ type: "text", category, text });
+          blockquoteMode = "legacy";
         }
-        items.push({ type: "text", category, text });
         inBlockquote = true;
+      } else if (blockquoteMode === "comment") {
+        // Continuation: append to the same item's comment.
+        const last = items[items.length - 1];
+        if (last && last.type === "text") {
+          last.comment = last.comment ? last.comment + "\n" + bqText : bqText;
+        }
       } else {
-        // Continuation: append to the last text item.
+        // Continuation: append to the last (legacy) item's text.
         const last = items[items.length - 1];
         if (last && last.type === "text") last.text += "\n" + bqText;
       }
+      lastWasTextLine = false;
     } else {
       inBlockquote = false;
+      lastWasTextLine = true;
       let text = line;
       let category = null;
       for (const emoji of Object.keys(EMOJI_TO_CAT)) {
