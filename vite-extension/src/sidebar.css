@@ -391,6 +391,31 @@ body {
 .vista-md-preview .md-cat-item.cat-evidence { border-left-color: var(--cat-evidence-border); }
 .vista-md-preview .md-cat-item p { margin: 0; }
 
+/* ===== Vista — source group header (feature 32) =====
+   One "go to source" control per consecutive run of items sharing the same
+   sourceUrl — icon + short hostname (never the full URL/scheme) as visible
+   text. Avoids a link per note or the raw URL repeated under every highlight. */
+.vista-source-header {
+  display: flex;
+  justify-content: flex-end;
+  margin: 12px 0 -4px;
+}
+.vista-source-header:first-child { margin-top: 0; }
+.vista-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-size: 11.5px;
+  padding: 3px 7px;
+}
+.vista-source-link svg { display: block; flex-shrink: 0; }
+.vista-source-link:hover { background: var(--surface-3); color: var(--accent); }
+
 /* ===== Unsaved indicator (vista-edit header) ===== */
 .unsaved-dot {
   font-size: 10px;

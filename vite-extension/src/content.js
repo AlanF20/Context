@@ -857,6 +857,22 @@ function unpaintItem(itemId) {
   paintedRanges.delete(itemId);
 }
 
+/**
+ * Scroll a painted item's highlight into view (feature 32 — "go to source").
+ * Ranges don't expose scrollIntoView themselves, so this targets the parent
+ * element of the range's start container. Returns false if the item isn't
+ * currently painted (caller decides whether to defer/retry).
+ */
+function scrollToItem(itemId) {
+  const rec = paintedRanges.get(itemId);
+  if (!rec) return false;
+  const node = rec.range.startContainer;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  if (!el || typeof el.scrollIntoView !== 'function') return false;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return true;
+}
+
 function clearAllPaint() {
   if (highlightApiAvailable()) {
     for (const cat of HL_CATEGORIES) {
@@ -903,6 +919,8 @@ const session = {
   softFailTimer: null,
   buffer: '',
   bufferOverflow: false,
+  // itemId the panel asked us to scroll to once it anchors (feature 32).
+  scrollTarget: null,
 };
 
 function quoteOf(item) {
@@ -921,6 +939,7 @@ async function startAnchorSession() {
   session.statuses.clear();
   session.passes = 0;
   session.graceDeadline = Date.now() + GRACE_MS;
+  session.scrollTarget = null;
 
   try {
     const data = await Store.readAll();
@@ -936,6 +955,21 @@ async function startAnchorSession() {
   } catch (err) {
     console.warn('[CH] anchor session init error:', err);
     return;
+  }
+
+  // Consume the "go to source" relay flag (feature 32): the panel stashes the
+  // target itemId here right before opening a NEW tab for a highlight's
+  // sourceUrl, since a fire-and-forget runtime message would race the content
+  // script attaching its listener. Cleared immediately so it never leaks to
+  // an unrelated later navigation.
+  try {
+    const { CH_SCROLL_TARGET } = await chrome.storage.local.get('CH_SCROLL_TARGET');
+    if (CH_SCROLL_TARGET) {
+      session.scrollTarget = CH_SCROLL_TARGET;
+      chrome.storage.local.remove('CH_SCROLL_TARGET');
+    }
+  } catch (_) {
+    /* extension context invalidated — ignore */
   }
 
   notifyAnchorStatus();
@@ -1043,6 +1077,10 @@ function runAnchorPass() {
     if (session.statuses.get(id) !== 'anchored') {
       session.statuses.set(id, 'anchored'); // late anchors upgrade a soft-fail
       changed = true;
+    }
+    if (session.scrollTarget === id) {
+      scrollToItem(id);
+      session.scrollTarget = null;
     }
   }
 
@@ -1170,6 +1208,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg && msg.type === 'CH_GET_ANCHOR_STATUS') {
     sendResponse({ url: location.href, statuses: Object.fromEntries(session.statuses) });
+  }
+  if (msg && msg.type === 'CH_SCROLL_TO_ITEM') {
+    // Tab was already open: the item may already be anchored (scroll now) or
+    // still pending/retrying (defer — runAnchorPass() picks this up the
+    // moment it paints). If it's already 'failed' it may still anchor late
+    // (soft-fail items stay retryable), so deferring is still correct; if it
+    // never does, this simply never fires — no error surfaces to the user.
+    if (!scrollToItem(msg.itemId)) session.scrollTarget = msg.itemId;
   }
 });
 

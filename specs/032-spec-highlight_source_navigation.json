@@ -1,13 +1,13 @@
 {
   "id": 32,
-  "status": "approved",
+  "status": "implemented",
   "createdAt": "2026-07-30T15:20:02Z",
   "author": "Spec-Writer",
   "title": "Volver a la página de origen de un resaltado desde la Vista",
   "description": "Añadir en la Vista un único control de navegación (ícono, sin texto de dominio ni URL) por cada racha de notas consecutivas que comparten sourceUrl, agrupando las notas por página de origen (absorbiendo el feature #2 pendiente 'preview_group_by_page'). Al hacer click, el panel enfoca la pestaña donde ya está abierta esa URL, o abre una pestaña nueva si no lo está, y en ambos casos hace scroll automático hasta el resaltado exacto en la página reutilizando la infraestructura de anclaje existente (features #4/#25/#27). No se modifica buildMd/parseMd/export .md: es un cambio de render de la Vista + un nuevo canal de mensajería panel↔content script.",
   "acceptance_criteria": [
-    "En la Vista, los ítems consecutivos que comparten el mismo sourceUrl no vacío se agrupan bajo un único encabezado de grupo con un botón ícono-only (sin texto de dominio ni URL visible en ningún momento).",
-    "El botón de grupo tiene aria-label y title con el hostname de la página (accesibilidad/tooltip), nunca impreso como texto visible en el documento.",
+    "En la Vista, los ítems consecutivos que comparten el mismo sourceUrl no vacío se agrupan bajo un único encabezado de grupo con un botón que muestra un ícono + el hostname de la página como texto visible (amendment 2026-07-30: antes era ícono-only; ver 'amendments').",
+    "El botón de grupo tiene aria-label y title redundantes con el hostname visible (accesibilidad/tooltip); la URL completa (con esquema http(s)://) nunca se imprime como texto visible en el documento.",
     "Ítems con sourceUrl vacío (creados a mano desde el editor de documento completo) no muestran encabezado de grupo ni ícono, y se renderizan igual que hoy.",
     "El modo de edición de documento completo (textarea de Markdown crudo) no muestra íconos ni URLs — el cambio es exclusivo del preview renderizado de la Vista.",
     "buildMd, parseMd y el export .md no cambian su salida para ningún contexto existente (regresión cero en el contrato Markdown).",
@@ -19,5 +19,12 @@
     "pnpm run build y init.sh pasan sin errores.",
     "Se agrega un spec E2E Playwright nuevo bajo vite-extension/tests/e2e/ que cubre: capturar en un sitio real, ver el ícono de grupo en la Vista, click, y verificar que se navega/enfoca la pestaña correcta (siguiendo el patrón de tests/e2e/029-highlight-reload-real-sites.spec.js)."
   ],
-  "dependencies": [4, 25, 27]
+  "dependencies": [4, 25, 27],
+  "amendments": [
+    {
+      "date": "2026-07-30",
+      "author": "user",
+      "change": "El control de grupo pasó de ícono-only a ícono + hostname visible como texto (el usuario pidió ver 'el nombre de la página'; se interpretó como el dominio, ya disponible vía Store.hostnameFromUrl — no como el <title> real de la página, que hubiera requerido capturar y persistir un campo nuevo por ítem). La URL completa con esquema sigue sin mostrarse nunca."
+    }
+  ]
 }

@@ -17,7 +17,7 @@
  *    onDirty()       — called on the first 'input' event (debounce in flight).
  *    onClean()       — called after each successful save.
  */
-import { createElement, NotebookPen } from "lucide";
+import { createElement, NotebookPen, ExternalLink } from "lucide";
 import { Store } from "./store.js";
 import { renderMarkdown } from "./markdown.js";
 
@@ -39,17 +39,70 @@ function emptyState() {
   return s;
 }
 
-/** Render the context as a rich Markdown preview into mountEl. */
+/**
+ * Partition items into consecutive runs sharing the same sourceUrl (feature
+ * 32). Items without a sourceUrl (hand-typed via the document editor) form
+ * their own run(s) but never get a navigation header — there is no page to
+ * go back to.
+ */
+export function groupItemsBySource(items) {
+  const groups = [];
+  for (const item of items) {
+    const sourceUrl = item.sourceUrl || "";
+    const last = groups[groups.length - 1];
+    if (last && last.sourceUrl === sourceUrl) {
+      last.items.push(item);
+    } else {
+      groups.push({ sourceUrl, items: [item] });
+    }
+  }
+  return groups;
+}
+
+/**
+ * One navigation control per page group: an icon plus the short hostname as
+ * visible text (never the full URL/scheme). Clicking asks sidebar.js (via
+ * data attributes, no closures here) to focus or open the source tab and
+ * scroll to this group's first highlight.
+ */
+function sourceGroupHeader(group) {
+  const hostname = Store.hostnameFromUrl(group.sourceUrl);
+  const header = document.createElement("div");
+  header.className = "vista-source-header";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "vista-source-link";
+  btn.setAttribute("aria-label", `Ir a ${hostname}`);
+  btn.title = hostname;
+  btn.dataset.sourceUrl = group.sourceUrl;
+  btn.dataset.itemId = group.items[0].id;
+  const icon = createElement(ExternalLink, { width: 13, height: 13 });
+  icon.style.pointerEvents = "none";
+  const label = document.createElement("span");
+  label.className = "vista-source-label";
+  label.textContent = hostname;
+  btn.append(icon, label);
+  header.appendChild(btn);
+  return header;
+}
+
+/** Render the context as a rich Markdown preview into mountEl, grouped by page of origin. */
 export function renderVista(mountEl, ctx) {
   mountEl.innerHTML = "";
   if (!ctx || !ctx.items.length) {
     mountEl.appendChild(emptyState());
     return;
   }
-  const div = document.createElement("div");
-  div.className = "vista-md-preview md";
-  div.innerHTML = renderMarkdown(Store.buildMd(ctx));
-  mountEl.appendChild(div);
+  const root = document.createElement("div");
+  root.className = "vista-md-preview md";
+  for (const group of groupItemsBySource(ctx.items)) {
+    if (group.sourceUrl) root.appendChild(sourceGroupHeader(group));
+    const section = document.createElement("div");
+    section.className = "vista-source-group";
+    section.innerHTML = renderMarkdown(Store.buildMdFragment(group.items));
+    root.appendChild(section);
+  }
+  mountEl.appendChild(root);
 }
 
 /**

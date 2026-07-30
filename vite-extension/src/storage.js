@@ -429,11 +429,15 @@ export function exportContextToText(ctx) {
  *   {text.text}
  *   _Fuente: {text.source}_
  */
-export function buildMd(ctx) {
-  if (!ctx) return "";
-  const lines = ["# " + (ctx.name || "Untitled"), ""];
-
-  for (const it of ctx.items) {
+/**
+ * Serialize a bare list of items (no context title line) to Markdown, using
+ * the same per-item rules as buildMd. Used by buildMd itself, and by the
+ * Vista's per-source-page grouping (feature 32) to render one page's worth
+ * of items as an independent Markdown fragment.
+ */
+export function buildMdFragment(items) {
+  const lines = [];
+  for (const it of items || []) {
     if (it.type === "subtitle") {
       lines.push("## " + it.text, "");
     } else {
@@ -454,6 +458,12 @@ export function buildMd(ctx) {
       lines.push("");
     }
   }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+export function buildMd(ctx) {
+  if (!ctx) return "";
+  const lines = ["# " + (ctx.name || "Untitled"), "", buildMdFragment(ctx.items)];
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
 

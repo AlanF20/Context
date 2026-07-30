@@ -61,6 +61,90 @@ above — the concrete case for why the rule exists.
 
 ---
 
+## Session 2026-07-30 — Feature #32: highlight_source_navigation
+
+**Status:** done
+
+**Summary:** Added a way to navigate from the Vista back to the page where a
+highlight was captured, per explicit user constraints: no link per note, and
+no raw URL repeated under each highlight. The Vista now groups consecutive
+items sharing the same `sourceUrl` under a single icon-only "go to source"
+button per group (hostname exposed only via `aria-label`/`title`, never as
+visible text). Clicking it focuses the tab if that URL is already open (any
+window), or opens a new tab if not — and in both cases scrolls to the exact
+highlight once it's (re)anchored, reusing the existing anchoring pipeline
+(features #4/#25/#27). This absorbs feature #2 (`preview_group_by_page`),
+which is now marked `done` with `spec_path` pointing at #32's spec (it had no
+spec of its own — its scope was folded into #32's).
+
+**Changes:**
+- `vite-extension/src/storage.js`: extracted `buildMdFragment(items)` out of
+  `buildMd(ctx)` (same per-item rules, no title line) so the Vista can render
+  one page-group's items as an independent Markdown fragment; `buildMd`'s
+  output is byte-for-byte unchanged (pinned by regression tests).
+- `vite-extension/src/content-storage.js`: resynced (`cp` + restored header)
+  per the standing project convention — this file must stay a full manual
+  copy of `storage.js`.
+- `vite-extension/src/content.js`: new `scrollToItem(itemId)` (scrolls the
+  painted Range's parent element into view); a new `session.scrollTarget`
+  field consumed in two ways — (a) a direct `CH_SCROLL_TO_ITEM` message when
+  the target tab is already open and its content script is alive, or (b) a
+  `chrome.storage.local` relay flag (`CH_SCROLL_TARGET`), read once in
+  `startAnchorSession()`, for the "open a brand-new tab" path where a
+  fire-and-forget message would race the content script attaching its
+  listener. Mirrors the existing `CH_NAV` relay pattern.
+- `vite-extension/src/sidebar/vista.js`: `groupItemsBySource(items)` (exported
+  for unit testing) partitions items into consecutive same-`sourceUrl` runs;
+  `renderVista` now renders one icon-only header (via `sourceGroupHeader`)
+  plus one Markdown fragment per group, instead of a single
+  `marked(buildMd(ctx))` call over the whole document.
+- `vite-extension/src/sidebar/source-nav.js` (new): `goToSource({sourceUrl,
+  itemId})` — queries `chrome.tabs` for an existing tab at that URL; focuses
+  tab+window and messages it directly if found, otherwise stashes
+  `CH_SCROLL_TARGET` and calls `chrome.tabs.create`. First use of
+  `chrome.tabs.create`/`update`/`chrome.windows.update` in the codebase — no
+  manifest permission change needed, since `host_permissions: ["<all_urls>"]`
+  already covers `tabs.query({url})` and `windows`/`tabs.create/update` need
+  no extra permission at all.
+- `vite-extension/src/sidebar.js`: delegated click listener on `#body` for
+  `.vista-source-link`, wired to `goToSource`.
+- `vite-extension/src/sidebar.css`: `.vista-source-header`/`.vista-source-link`
+  styles (reuses `.icon-btn`).
+- Tests: `tests/032-vista-grouping.test.js` (Vitest — grouping logic,
+  `buildMd`/`buildMdFragment` regression, `goToSource` tab-decision logic with
+  a `chrome.tabs`/`chrome.storage` mock); `tests/e2e/032-source-navigation.spec.js`
+  (Playwright, real external site — one group icon with no visible URL text,
+  click-focuses-existing-tab-no-duplicate, click-creates-new-tab-then-anchors).
+
+**Process note:** the E2E spec's own polling helper (`waitForAnchorStatus`)
+initially failed once on the "brand-new tab" case with "Could not establish
+connection" — a race in the *test helper* (it sent `CH_GET_ANCHOR_STATUS`
+before the fresh tab's content script had attached its listener), not a bug
+in `goToSource`/`content.js`. Fixed by treating that rejection as "not
+anchored yet, keep polling" (same as the existing "no tab yet" branch), not by
+loosening what the test asserts — flagged here per the standing rule to never
+silently adjust a test to force it to pass.
+
+**Addendum (mismo día): el usuario pidió mostrar el nombre de la página junto
+al ícono.** Se clarificó por pregunta directa (no había ambigüedad que
+ameritara research: "nombre" = el dominio, ya disponible vía
+`Store.hostnameFromUrl`, no el `<title>` real de la página — eso hubiera
+requerido capturar y persistir un campo nuevo por ítem) y el layout deseado
+(ícono + texto, ambos visibles). Esto revierte a propósito dos criterios de
+aceptación originales de la spec ("ícono-only", "nunca impreso como texto
+visible") — documentado como `amendments` en
+`specs/032-spec-highlight_source_navigation.json` en vez de reescribir la
+historia. Cambios: `vista.js` (`sourceGroupHeader` agrega un `<span
+class="vista-source-label">`), `sidebar.css` (el botón pasa de ícono
+cuadrado 24×24 a pastilla `inline-flex` ícono+texto). El E2E de la sección
+"sin URL/dominio como texto visible" se actualizó para afirmar lo contrario
+del dominio (visible) mientras seguía negando la URL completa con esquema —
+no se tocó ninguna aserción sobre `chrome.tabs`/scroll/anclaje. 68/68 Vitest
+y 17/17 Playwright en verde tras el cambio; `pnpm run build` e `init.sh`
+también.
+
+---
+
 ## Session 2026-07-29 — Feature #29: e2e_highlight_reload_real_sites
 
 **Status:** done

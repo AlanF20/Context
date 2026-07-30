@@ -25,6 +25,7 @@ import { confirmDelete } from "./sidebar/modal.js";
 import { createAnchorStatus } from "./sidebar/anchor-status.js";
 import { EXPORT_FORMATS } from "./sidebar/export-formats.js";
 import { createExportMenu } from "./sidebar/export-menu.js";
+import { goToSource } from "./sidebar/source-nav.js";
 
 const railList = $("#rail-list");
 const railAdd = $("#rail-add");
@@ -50,6 +51,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initTheme(themeToggle);
   railAdd.addEventListener("click", onCreateContext);
   document.addEventListener("keydown", onGlobalKeydown);
+  bodyEl.addEventListener("click", onBodyClick);
   anchorStatus.init();
 
   // Pre-select the context requested by a fast-save from the capture toolbar.
@@ -252,6 +254,13 @@ async function renderMain() {
     renderVista(bodyEl, ctx);
     anchorStatus.attach(bodyEl, ctx);
   }
+}
+
+/** Delegated click handler for the Vista's per-page "go to source" icons. */
+function onBodyClick(e) {
+  const btn = e.target.closest(".vista-source-link");
+  if (!btn) return;
+  goToSource({ sourceUrl: btn.dataset.sourceUrl, itemId: btn.dataset.itemId });
 }
 
 function countItems(ctx) {
