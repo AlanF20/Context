@@ -139,6 +139,19 @@ export function writeAll(data) {
   });
 }
 
+/** Whether the onboarding modal has already been dismissed once. */
+export async function hasSeenOnboarding() {
+  const data = await readAll();
+  return !!data.onboardingSeen;
+}
+
+/** Persist that the onboarding modal has been dismissed. */
+export async function markOnboardingSeen() {
+  const data = await readAll();
+  data.onboardingSeen = true;
+  await writeAll(data);
+}
+
 // --- Context operations ---
 
 /** Return all contexts as an array, newest first. */

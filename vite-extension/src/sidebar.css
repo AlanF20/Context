@@ -570,6 +570,70 @@ body {
 }
 .btn.danger:hover { filter: brightness(1.1); }
 
+/* ===== Onboarding modal — reuses #confirm-delete-modal's dialog chrome ===== */
+#onboarding-modal {
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  padding: 20px 22px 16px;
+  width: 320px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 28px var(--shadow-lg);
+}
+#onboarding-modal::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+.onboarding-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--fg);
+}
+.onboarding-intro {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--fg-2);
+}
+.onboarding-subhead {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+.onboarding-categories {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.onboarding-category {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.onboarding-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.onboarding-swatch-title    { background: var(--cat-title-border); }
+.onboarding-swatch-idea     { background: var(--cat-idea-border); }
+.onboarding-swatch-argument { background: var(--cat-arg-border); }
+.onboarding-swatch-evidence { background: var(--cat-evidence-border); }
+.onboarding-category-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.onboarding-category-text strong { color: var(--fg); }
+
 /* ===== Vista — inline full-document editor ===== */
 .vista-edit-doc {
   flex: 1 1 auto;

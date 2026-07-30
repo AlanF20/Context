@@ -1,0 +1,24 @@
+{
+  "id": 33,
+  "status": "implemented",
+  "createdAt": "2026-07-30T00:00:00Z",
+  "author": "Spec-Writer",
+  "title": "Rebrand a 'Active Reading': ícono, nombre y explicación del sistema de categorías",
+  "description": "Rebrand acotado de 'Context Highlighter' a 'Active Reading': (1) nuevo ícono en manifest.json/action generado desde vite-extension/src/assets/icon.png en los tamaños que Chrome requiere; (2) nuevo nombre y descripción en manifest.json; (3) un modal de onboarding en el side panel, mostrado una única vez en la primera apertura, que explica qué es la lectura activa y qué significa cada una de las 4 categorías/colores existentes (Título/Idea/Argumento/Evidencia), más un ícono '?' persistente en el rail para reabrir esa explicación en cualquier momento. No cambian las 4 categorías, sus colores, el modelo de datos, buildMd/parseMd, el export .md, ni la paleta general de la UI — es estrictamente ícono + nombre + superficie explicativa nueva.",
+  "acceptance_criteria": [
+    "vite-extension/src/assets/ contiene icon-16.png, icon-32.png, icon-48.png e icon-128.png generados desde icon.png (mismas proporciones, PNG cuadrado), vía un script repetible (p.ej. un script npm que invoque `sips`) documentado en package.json, no un export manual no reproducible.",
+    "manifest.json declara \"icons\" con las claves 16/32/48/128 apuntando a esos archivos, y \"action.default_icon\" con al menos 16/32 para la toolbar.",
+    "manifest.json cambia \"name\" a \"Active Reading\" y \"description\" a una descripción en español que mencione lectura activa y archivado por contexto (reemplazando la actual).",
+    "Al abrir el side panel por primera vez (sin flag previo en chrome.storage.local), aparece un modal con: título 'Lectura activa: cómo funciona', un párrafo explicando qué es la lectura activa y por qué clasificar resaltados ayuda a comprender/retener, una sección 'Qué significa cada color' con las 4 categorías (nombre + swatch de su color real + una frase explicando su rol), y un botón 'Entendido' que cierra el modal.",
+    "Tras cerrarse una vez (botón 'Entendido', tecla Escape, o click en el overlay), el modal persiste un flag en chrome.storage.local y no vuelve a aparecer automáticamente en aperturas futuras del side panel.",
+    "El rail muestra un ícono '?' persistente (usando un ícono de lucide ya disponible en el proyecto, sin añadir dependencias nuevas) que reabre el mismo modal en cualquier momento, incluso después de que el flag de primera vez ya esté guardado.",
+    "El modal cumple accesibilidad básica de diálogo: role='dialog', aria-modal='true', aria-labelledby apuntando al título, focus trap mientras está abierto, Escape lo cierra y devuelve el foco al control que lo abrió.",
+    "Cada swatch de color en el modal lleva también el nombre de la categoría como texto (no depende solo del color para comunicar significado), consistente con el criterio WCAG SC 1.4.1 ya aplicado en la feature #6.",
+    "No se modifican storage.js, content-storage.js, buildMd, parseMd, el modelo de datos de items, ni los colores/tokens --cat-*-border existentes.",
+    "No se modifica outputs/ (legado congelado).",
+    "pnpm run build e init.sh pasan sin errores.",
+    "pnpm run test (Vitest) pasa, incluyendo un test nuevo para la lógica del flag de primera-apertura (p.ej. en storage.js o un módulo sidebar/onboarding.js) siguiendo la convención NNN-modulo.test.js.",
+    "No se requiere spec E2E Playwright nuevo salvo que la implementación toque content.js/content-storage.js (no debería: el cambio vive en manifest.json y en el side panel) — si el Implementer determina que sí toca el DOM de la página anfitriona, aplica la regla dura de tests/e2e/ del CLAUDE.md."
+  ],
+  "dependencies": []
+}

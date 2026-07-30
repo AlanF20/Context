@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "test:e2e": "vite build && playwright test"
+    "test:e2e": "vite build && playwright test",
+    "icons": "sips -z 16 16 src/assets/icon.png --out src/assets/icon-16.png && sips -z 32 32 src/assets/icon.png --out src/assets/icon-32.png && sips -z 48 48 src/assets/icon.png --out src/assets/icon-48.png && sips -z 128 128 src/assets/icon.png --out src/assets/icon-128.png"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "latest",

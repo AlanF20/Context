@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Context Highlighter</title>
+    <title>Active Reading</title>
     <link rel="stylesheet" href="sidebar.css" />
   </head>
   <body>
@@ -12,6 +12,12 @@
         <button id="theme-toggle" class="icon-btn" title="Cambiar tema">
           ◐
         </button>
+        <button
+          id="onboarding-help-btn"
+          class="icon-btn"
+          title="Ver explicación de lectura activa"
+          aria-label="Ver explicación de lectura activa"
+        ></button>
         <div id="rail-list"></div>
         <button id="rail-add" class="rail-add" title="Nuevo contexto">+</button>
       </nav>
@@ -29,6 +35,60 @@
       <div class="modal-actions">
         <button class="btn ghost modal-cancel">Cancelar</button>
         <button class="btn danger modal-confirm">Eliminar</button>
+      </div>
+    </dialog>
+
+    <dialog
+      id="onboarding-modal"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
+    >
+      <h2 id="onboarding-title" class="onboarding-title">
+        Lectura activa: cómo funciona
+      </h2>
+      <p class="onboarding-intro">
+        La lectura activa es una forma de leer en la que no solo marcas
+        texto, sino que decides qué rol juega cada fragmento mientras lees:
+        ¿es un tema nuevo? ¿una idea a seguir? ¿un argumento? ¿un dato que
+        respalda algo? Esa clasificación —parecida a técnicas como las notas
+        Cornell o el método SQ3R— es lo que convierte un resaltado en
+        comprensión real: en vez de subrayar todo del mismo color y olvidar
+        por qué, cada nota queda archivada con sentido, lista para
+        reconstruirse como apuntes de investigación.
+      </p>
+      <h3 class="onboarding-subhead">Qué significa cada color</h3>
+      <ul class="onboarding-categories">
+        <li class="onboarding-category">
+          <span class="onboarding-swatch onboarding-swatch-title" aria-hidden="true"></span>
+          <span class="onboarding-category-text">
+            <strong>Título</strong> — Marca un punto de estructura: el inicio
+            de un tema o sección nueva dentro de tu contexto de investigación.
+          </span>
+        </li>
+        <li class="onboarding-category">
+          <span class="onboarding-swatch onboarding-swatch-idea" aria-hidden="true"></span>
+          <span class="onboarding-category-text">
+            <strong>Idea</strong> — Un concepto que vale la pena recordar,
+            todavía sin conectar con un argumento o evidencia concretos.
+          </span>
+        </li>
+        <li class="onboarding-category">
+          <span class="onboarding-swatch onboarding-swatch-argument" aria-hidden="true"></span>
+          <span class="onboarding-category-text">
+            <strong>Argumento</strong> — El razonamiento que conecta ideas:
+            por qué algo se sostiene, no solo qué se afirma.
+          </span>
+        </li>
+        <li class="onboarding-category">
+          <span class="onboarding-swatch onboarding-swatch-evidence" aria-hidden="true"></span>
+          <span class="onboarding-category-text">
+            <strong>Evidencia</strong> — Un dato, cita o hecho concreto que
+            respalda un argumento — la parte verificable de tu investigación.
+          </span>
+        </li>
+      </ul>
+      <div class="modal-actions">
+        <button class="btn onboarding-close">Entendido</button>
       </div>
     </dialog>
 

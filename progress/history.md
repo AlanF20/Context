@@ -668,3 +668,71 @@ externo invocara `switchMode` directamente. `docEditor.isDirty()` y la rama Vist
 cubiertas a nivel Vitest, pero TC-04/TC-05 del plan de pruebas quedaron marcados como no verificables
 (ni manual ni E2E) hasta que se restaure un punto de entrada o se decida eliminar esa rama muerta.
 Detalle completo en `docs/test_editor_stale_buffer_cross_page.md`.
+
+---
+
+## Session 2026-07-30 — Feature #33: active_reading_rebrand
+
+**Status:** done
+
+**Summary:** Rebrand acotado de "Context Highlighter" a "Active Reading": nuevo ícono (provisto
+por el usuario en `src/assets/icon.png`, 1254×1254), nuevo nombre/descripción en `manifest.json`,
+y un modal de onboarding en el side panel que explica qué es la lectura activa y qué significa
+cada una de las 4 categorías/colores existentes (Título/Idea/Argumento/Evidencia) — más un ícono
+"?" persistente en el rail para reabrirlo. Las 4 categorías, sus colores, el modelo de datos,
+`buildMd`/`parseMd` y la paleta general de la UI **no cambiaron** (constraint confirmado por el
+usuario en la entrevista). Pipeline completo: Interviewer (4 preguntas) → Researcher
+(`docs/research_active_reading_rebrand.md`) → Spec-Writer
+(`specs/033-spec-active_reading_rebrand.json`) → ⛔ aprobación humana ("proceed") → Tester
+(`docs/test_active_reading_rebrand.md`) → Implementer → Reviewer.
+
+**Changes:**
+- `vite-extension/src/assets/icon-{16,32,48,128}.png` (nuevos): generados desde `icon.png` vía
+  `sips` (herramienta nativa de macOS, sin dependencias nuevas).
+- `vite-extension/package.json`: nuevo script `"icons"` que encadena los 4 comandos `sips`, para
+  poder regenerar los tamaños si el ícono fuente cambia.
+- `vite-extension/manifest.json`: `name` → `"Active Reading"`, `description` nueva en español,
+  `icons` + `action.default_icon` con las 4 claves de tamaño, `action.default_title` actualizado
+  (hallazgo del Reviewer: seguía diciendo "Open Context Highlighter sidebar" — corregido a "Abrir
+  el panel de Active Reading").
+- `vite-extension/src/sidebar.html`: `<title>` → "Active Reading"; nuevo botón `#onboarding-help-btn`
+  en el rail (ícono lucide `CircleQuestionMark` — confirmado que `HelpCircle`/`CircleHelp` no
+  existen en la versión instalada); nuevo `<dialog id="onboarding-modal">` con título, párrafo
+  explicativo (copy exacto del research), lista de 4 categorías (swatch + nombre + explicación,
+  cada swatch referenciando los tokens `--cat-*-border` ya existentes, no hex hardcodeado), y
+  botón "Entendido".
+- `vite-extension/src/sidebar/onboarding.js` (nuevo): `openOnboarding()` / `initOnboarding(btn)`,
+  mismo patrón de `<dialog>` nativo que `modal.js`. Auto-muestra en la primera apertura
+  (`!Store.hasSeenOnboarding()`), marca el flag en el evento `close` del diálogo (cubre botón/
+  Escape/click-en-backdrop vía un listener adicional que compara `e.target === dialog`). Reabrir
+  desde el ícono "?" no depende del flag.
+- `vite-extension/src/storage.js`: `hasSeenOnboarding()` / `markOnboardingSeen()`, puramente
+  aditivo sobre el documento `{contexts}` ya existente (`data.onboardingSeen`). No se tocó
+  `buildMd`/`parseMd`/`CATEGORIES`/`typeForCategory` — por eso `content-storage.js` **no** se
+  resincronizó (el flag es solo de UI del side panel, el content script nunca lo usa).
+- `vite-extension/src/sidebar.css`: estilos aditivos para `#onboarding-modal` (reutiliza el chrome
+  de diálogo de `#confirm-delete-modal`) y para el botón "?" (reutiliza `.icon-btn`, sin clase
+  nueva de botón).
+- `vite-extension/src/sidebar.js`: importa y llama `initOnboarding(onboardingHelpBtn)` al arrancar,
+  mismo patrón que `initTheme`.
+- `vite-extension/tests/033-onboarding.test.js` (nuevo): mock en memoria de
+  `chrome.storage.local` — flag ausente → false, tras `markOnboardingSeen()` → true, flag
+  pre-poblado → true, marcar el flag no pisa `contexts`/items existentes.
+
+**Verificación:** 7/7 archivos Vitest, 72/72 tests en verde (incluye los 4 nuevos). `pnpm run
+build` sin errores (íconos y manifest compilan correctamente a `dist/`). `./init.sh` en verde.
+`git diff --stat -- outputs/` vacío (legado intacto). `content.js`/`content-storage.js` sin tocar
+— no se requirió spec E2E nuevo (regla dura de CLAUDE.md solo aplica a cambios de DOM en la página
+anfitriona; este cambio vive en `manifest.json` + side panel). Tamaños de ícono verificados con
+`sips -g pixelWidth -g pixelHeight` (16/32/48/128 exactos).
+
+**Hallazgo del Reviewer (corregido en la misma sesión):** el Implementer no actualizó
+`action.default_title` en `manifest.json`, dejando "Open Context Highlighter sidebar" visible en
+el tooltip de la toolbar — inconsistente con el resto del rebrand aunque no estaba listado
+explícitamente en los acceptance criteria de la spec. Corregido directamente por el Reviewer
+(cambio de una línea) y reverificado con `pnpm run build` + inspección del `dist/manifest.json`
+compilado.
+
+**Pendiente:** verificación manual en Chrome real de `docs/test_active_reading_rebrand.md`
+(secciones 3–5: build & load, modal de onboarding, accesibilidad) — no ejecutada en esta sesión,
+solo la verificación automatizada/de build.

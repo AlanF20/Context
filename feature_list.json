@@ -491,6 +491,16 @@
       "spec_path": "specs/031-spec-highlight_comment_capture.json",
       "dependencies": [],
       "status": "done"
+    },
+    {
+      "id": 33,
+      "name": "active_reading_rebrand",
+      "title": "Rebrand completo: 'Active Reading' — ícono, nombre, y explicación del sistema de categorías",
+      "description": "Rebrand de la extensión bajo el concepto 'Active Reading': nuevo ícono (vite-extension/src/assets/icon.png), nuevo nombre/identidad en manifest y UI, y una superficie dentro del side panel que explique qué es 'active reading' y qué significa cada categoría/color (Título/Idea/Argumento/Evidencia) para que un usuario nuevo entienda el sistema sin tener que descubrirlo por prueba y error.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/033-spec-active_reading_rebrand.json",
+      "dependencies": [],
+      "status": "done"
     }
   ],
   "evaluations": [

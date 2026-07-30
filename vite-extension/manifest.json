@@ -1,16 +1,28 @@
 {
   "manifest_version": 3,
-  "name": "Context Highlighter",
+  "name": "Active Reading",
   "version": "2.0.0",
-  "description": "Resalta texto en cualquier página y archívalo por contexto de investigación.",
+  "description": "Practicá lectura activa: clasificá tus resaltados por categoría y archívalos por contexto de investigación.",
   "permissions": ["storage", "sidePanel"],
   "host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "src/assets/icon-16.png",
+    "32": "src/assets/icon-32.png",
+    "48": "src/assets/icon-48.png",
+    "128": "src/assets/icon-128.png"
+  },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
   "action": {
-    "default_title": "Open Context Highlighter sidebar"
+    "default_title": "Abrir el panel de Active Reading",
+    "default_icon": {
+      "16": "src/assets/icon-16.png",
+      "32": "src/assets/icon-32.png",
+      "48": "src/assets/icon-48.png",
+      "128": "src/assets/icon-128.png"
+    }
   },
   "side_panel": {
     "default_path": "src/sidebar.html"

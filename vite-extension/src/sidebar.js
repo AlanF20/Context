@@ -16,6 +16,7 @@ import { createElement, Sparkles, Download, ChevronDown } from "lucide";
 import { $ } from "./sidebar/dom.js";
 import { Store } from "./sidebar/store.js";
 import { initTheme } from "./sidebar/theme.js";
+import { initOnboarding } from "./sidebar/onboarding.js";
 import { renderRail } from "./sidebar/rail.js";
 import { renderVista, createDocEditor } from "./sidebar/vista.js";
 import { createEditorController } from "./sidebar/editor.js";
@@ -32,6 +33,7 @@ const railAdd = $("#rail-add");
 const ctxHeader = $("#ctx-header");
 const bodyEl = $("#body");
 const themeToggle = $("#theme-toggle");
+const onboardingHelpBtn = $("#onboarding-help-btn");
 
 // ---- State ----
 let contexts = [];
@@ -49,6 +51,7 @@ const exportMenu = createExportMenu();
 // =======================================================================
 document.addEventListener("DOMContentLoaded", async () => {
   initTheme(themeToggle);
+  initOnboarding(onboardingHelpBtn);
   railAdd.addEventListener("click", onCreateContext);
   document.addEventListener("keydown", onGlobalKeydown);
   bodyEl.addEventListener("click", onBodyClick);
