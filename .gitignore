@@ -4,3 +4,5 @@ vite-extension/node_modules/
 vite-extension/dist/
 
 harness-toolkit/
+
+store/*.zip

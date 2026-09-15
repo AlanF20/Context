@@ -16,6 +16,31 @@ import path from "node:path";
 // for plain .js files doesn't support it without "type": "module".
 const pathToExtension = path.resolve(process.cwd(), "dist");
 
+/**
+ * The onboarding modal (feature 33) auto-opens on any fresh Chromium profile
+ * — its "seen" flag lives inside the same chrome.storage.local object as
+ * `contexts` (src/storage.js hasSeenOnboarding/markOnboardingSeen), and every
+ * E2E profile here starts empty. Left alone it's a native <dialog> that
+ * intercepts every click until dismissed, breaking any spec that opens the
+ * side panel (feature 35).
+ *
+ * Seeding the flag once wouldn't survive specs that overwrite the WHOLE
+ * contextHighlighter object to plant their own fixture data (028, 030) —
+ * that wipes onboardingSeen back to falsy, and the modal reopens on the next
+ * reload. So instead of seeding storage, this watches every page's DOM
+ * content loads (not just the first) and closes the modal whenever it shows.
+ */
+async function autoDismissOnboarding(page) {
+  if (!page.url().includes("sidebar.html")) return; // skip real sites, about:blank — no such element there
+  const dialog = page.locator("#onboarding-modal");
+  const opened = await dialog
+    .waitFor({ state: "visible", timeout: 1500 })
+    .then(() => true)
+    .catch(() => false);
+  if (!opened) return;
+  await dialog.locator(".onboarding-close").click().catch(() => {});
+}
+
 export const test = base.extend({
   context: async ({}, use) => {
     // headless: true resolves to Playwright's chrome-headless-shell binary,
@@ -28,6 +53,16 @@ export const test = base.extend({
         `--disable-extensions-except=${pathToExtension}`,
         `--load-extension=${pathToExtension}`,
       ],
+    });
+    // 'page' fires for every page in this context — the fixture's own `page`
+    // below, and any context.newPage() a spec creates itself (032, 034).
+    // domcontentloaded is re-subscribed per page (not one-shot) so a modal
+    // that reopens after a spec's own storage overwrite + reload gets closed
+    // again too.
+    context.on("page", (newPage) => {
+      newPage.on("domcontentloaded", () => {
+        autoDismissOnboarding(newPage).catch(() => {});
+      });
     });
     await use(context);
     await context.close();

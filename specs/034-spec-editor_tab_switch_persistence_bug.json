@@ -1,0 +1,43 @@
+{
+  "id": 34,
+  "status": "implemented",
+  "createdAt": "2026-09-04",
+  "author": "Spec-Writer Agent",
+  "title": "Fix: visitar la pestaña Editor sin editar borra el ancla de resaltado de todos los ítems del contexto",
+  "description": "Al cambiar de la pestaña Vista a Editor (Monaco) y volver a Vista — sin escribir nada en el editor —, y luego recargar la página web donde se hizo el resaltado, el highlight visual (.ch-hl-*) ya no se re-pinta, aunque la nota siga existiendo en Vista/Editor. Causa raíz (docs/research_editor_tab_switch_persistence_bug.md): `switchMode()` en sidebar.js llama incondicionalmente a `editor.flush(saveWithHistory)` al salir del modo Editor, y `flush()` (editor.js:108-120) ejecuta `onSave`→`Store.replaceContextFromMarkdown` con solo comprobar que Monaco esté montado (`editor && currentCtxId`), sin comprobar si el buffer cambió. `replaceContextFromMarkdown` (storage.js:361-388) reconstruye TODOS los ítems del contexto desde el Markdown parseado, asignándoles id nuevo y vaciando `sourceUrl`/`rangePrefix`/`rangeSuffix`/`rangeText`/`rangeStart`/`rangeEnd` — el dato que content.js necesita para reanclar el resaltado en el DOM al recargar. Como efecto secundario, `contextForThisPage()` (content.js:176-188), que empareja por `sourceUrl === location.href` para preseleccionar el contexto detectado en la toolbar flotante de captura, deja de encontrar coincidencia — de ahí que el usuario perciba que 'el contexto seleccionado desaparece' y deba re-elegirlo a mano.",
+  "acceptance_criteria": [
+    "Capturar un resaltado en un sitio real, cambiar a la pestaña Editor sin escribir nada, volver a Vista, y recargar la página: el resaltado se re-pinta igual que si nunca se hubiera visitado el Editor.",
+    "En el mismo flujo, la toolbar flotante de captura sigue mostrando el punto de color del contexto detectado para esa página (contextForThisPage encuentra coincidencia) tras el reload.",
+    "Si el usuario SÍ edita el texto en el Editor (cambia contenido real) y sale de la pestaña, el guardado ocurre como hoy — el comportamiento documentado en spec 004/027 (los ítems tocados por una edición real en Editor pierden su ancla porque el Markdown no puede representar posición DOM) NO cambia.",
+    "Cmd+S / Ctrl+S dentro del Editor sigue guardando de inmediato en cualquier caso (con o sin cambios), sin regresión.",
+    "Salir del Editor sin haber tocado nada no genera una entrada nueva en el historial de undo/redo para ese contexto (evita snapshots vacíos).",
+    "El mismo criterio aplica al modo Vista-edit (docEditor.flush()) si comparte el patrón de guardar incondicionalmente al salir sin cambios — verificar y aplicar el mismo fix si corresponde.",
+    "pnpm run build termina sin errores.",
+    "init.sh pasa sin errores de sintaxis.",
+    "Se agrega un spec E2E Playwright nuevo bajo vite-extension/tests/e2e/ que cubre: capturar en un sitio real, cambiar a Editor sin editar, volver a Vista, recargar la página, y verificar que el highlight sigue re-pintándose (siguiendo el patrón de tests/e2e/029-highlight-reload-real-sites.spec.js)."
+  ],
+  "implementation_plan": {
+    "files_to_edit": [
+      "vite-extension/src/sidebar/editor.js",
+      "vite-extension/src/sidebar/vista.js"
+    ],
+    "changes": [
+      {
+        "file": "vite-extension/src/sidebar/editor.js",
+        "function": "flush(onSave)",
+        "change": "Antes de llamar a onSave/Store.replaceContextFromMarkdown, comprobar si el buffer está realmente sucio (mismo criterio que ya usa isDirty(): tabDirtyEl no oculto). Si no hay cambios pendientes, flush() debe ser un no-op (no persistir, no invocar onSave, no tocar el historial). El comando Cmd+S sigue llamando a flush() igual que hoy; si no hay nada sucio, el no-op es inocuo (no hay nada que guardar)."
+      },
+      {
+        "file": "vite-extension/src/sidebar/vista.js",
+        "function": "docEditor.flush() y el listener 'blur' del textarea (mount())",
+        "change": "Confirmado en investigación: docEditor comparte el mismo defecto por dos vías. (a) flush() (vista.js:178-183) guarda incondicionalmente si `taRef && currentCtxId`, sin comprobar `dirtySignalled`. (b) El listener 'blur' (vista.js:164-168) pone `dirtySignalled = false` y llama a `save()` incondicionalmente, sin comprobar si en realidad hubo un 'input' previo — simplemente perder el foco del textarea (p. ej. al hacer click en la pestaña Editor) dispara un guardado aunque no se haya tecleado nada. Ambos casos deben comprobar `dirtySignalled` ANTES de llamar a `save()`; si es false, no-op (no persistir, no invocar onSync/onClean)."
+      }
+    ]
+  },
+  "out_of_scope": [
+    "Preservar el ancla de resaltado para ítems que SÍ fueron editados de verdad en el Editor (limitación de diseño aceptada en spec 004/027, no se toca).",
+    "Cambiar el formato Markdown para poder representar rangePrefix/rangeSuffix/rangeStart/rangeEnd/sourceUrl (fuera de alcance de este fix puntual)."
+  ],
+  "dependencies": [18, 30],
+  "research_path": "docs/research_editor_tab_switch_persistence_bug.md"
+}

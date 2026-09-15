@@ -18,6 +18,26 @@
 
 ---
 
+## Session 2026-09-04 — Feature #34: editor_tab_switch_persistence_bug
+
+**Status:** done
+
+**Repro reportado por el usuario:** al cambiar de Vista a Editor y volver a Vista (sin escribir nada), y luego recargar la página web (F5), el resaltado visual ya no se re-pinta — aunque la nota sigue en el panel. Efecto secundario: el "contexto detectado" de la toolbar flotante de captura también desaparecía.
+
+**Causa raíz (docs/research_editor_tab_switch_persistence_bug.md):** `editor.flush()` (editor.js) y `docEditor.flush()`/`blur` (vista.js) guardaban incondicionalmente al salir del modo Editor/Vista-edit, sin comprobar si el buffer estaba realmente sucio. Eso disparaba `Store.replaceContextFromMarkdown`, que reconstruye TODOS los ítems del contexto y vacía `sourceUrl`/`rangePrefix`/`rangeSuffix`/`rangeText`/`rangeStart`/`rangeEnd` — el dato que `content.js` necesita para reanclar el highlight al recargar, y que `contextForThisPage()` necesita para detectar el contexto de la página.
+
+**Changes:**
+- `vite-extension/src/sidebar/editor.js`: `flush(onSave, { force })` — no-op si el buffer no está dirty, salvo `force: true` (usado por el atajo Cmd+S, que sigue guardando siempre).
+- `vite-extension/src/sidebar/vista.js`: `docEditor.flush()` y el listener `blur` del textarea ahora comprueban `dirtySignalled` antes de guardar.
+- `vite-extension/tests/034-flush-clean-noop.test.js` (Vitest, nuevo): cubre el no-op de `docEditor.flush()`/`blur` cuando está limpio y el guardado normal cuando está dirty (Monaco no es mockeable en jsdom, así que ese lado se cubre solo por E2E).
+- `vite-extension/tests/e2e/034-editor-visit-preserves-anchor.spec.js` (Playwright, nuevo): sitio real, captura, visita a Editor sin editar, vuelta a Vista, reload — verifica que el highlight se reancla y que la toolbar sigue detectando el contexto; segundo test confirma que una edición real sigue perdiendo el ancla (sin regresión de spec 004/027).
+
+**Verificación:** `pnpm run build` OK, `pnpm run test` 77/77 OK, `init.sh` OK, `pnpm run test:e2e -- tests/e2e/034-editor-visit-preserves-anchor.spec.js` 2/2 OK.
+
+**Hallazgo fuera de alcance (no corregido, reportado al usuario):** el modal de onboarding introducido por la feature #33 bloquea (`intercepts pointer events`) todos los E2E que abren el side panel en un profile de Chromium nuevo — reproducido incluso con el fix de esta sesión revertido (stash), confirmando que es una regresión pre-existente de la #33, no de la #34. Rompe en la práctica los specs 028, 029 (parcial), 030, 031 y 032 en un profile limpio. El spec nuevo de esta sesión lo esquiva con un `dismissOnboardingIfOpen()` local. Pendiente decidir si se abre una feature nueva para el fix de raíz.
+
+---
+
 ## Session 2026-07-30 — Feature #31: highlight_comment_capture
 
 **Status:** done
@@ -736,3 +756,38 @@ compilado.
 **Pendiente:** verificación manual en Chrome real de `docs/test_active_reading_rebrand.md`
 (secciones 3–5: build & load, modal de onboarding, accesibilidad) — no ejecutada en esta sesión,
 solo la verificación automatizada/de build.
+
+---
+
+## Session 2026-09-04 — Feature #35: onboarding_modal_blocks_e2e
+
+**Status:** done
+
+**Descubierto durante el cierre de la feature #34:** el modal de onboarding introducido por la
+feature #33 se auto-abre en cualquier perfil de Chromium nuevo (su flag `onboardingSeen` vive
+dentro del mismo objeto `contextHighlighter` que `contexts` en chrome.storage.local) e intercepta
+todos los clics (`<dialog>` nativo, "intercepts pointer events") hasta cerrarse. Confirmado
+independiente de la #34 (reproducido con ese fix revertido vía `git stash`). Rompía en la práctica
+los specs 028, 030, 031 y 032 (029 no abre el side panel, no estaba afectado).
+
+**Causa raíz de por qué un seed único no bastaba (docs/research_onboarding_modal_blocks_e2e.md):**
+los specs 028 y 030 sobrescriben el objeto `contextHighlighter` completo para sembrar su fixture
+de datos, borrando `onboardingSeen` y reabriendo el modal en el siguiente `reload()`.
+
+**Changes:**
+- `vite-extension/tests/e2e/fixtures.js`: nuevo `autoDismissOnboarding(page)` + `context.on("page", ...)`
+  con un listener `domcontentloaded` persistente (no one-shot) por página — cierra el modal en la
+  carga inicial de `sidebar.html` y en cualquier reload posterior, sin tocar `onboarding.js`,
+  `storage.js` ni los specs individuales.
+- `vite-extension/tests/e2e/034-editor-visit-preserves-anchor.spec.js`: limpieza — removido el
+  `dismissOnboardingIfOpen()` local, ya redundante una vez que el fixture lo maneja centralmente.
+
+**Verificación:** `pnpm run build` OK, `pnpm run test` 77/77 OK, `init.sh` OK, `pnpm exec playwright
+test` (suite completa, 19 tests): 17 passed, 1 flaky en 031 (resize, no relacionado, pasó en
+retry), 1 failed en 029/Medium — confirmado pre-existente e independiente de este fix (reproducido
+igual revirtiendo `fixtures.js` vía stash; ese spec nunca abre el side panel). Cero fallos por
+"intercepts pointer events" tras el fix.
+
+**Pendiente:** el fallo de 029/Medium ("never reached 'anchored' status") queda fuera de alcance —
+posible flakiness real del sitio (paywall/contenido cambiado), no relacionado con el modal de
+onboarding. Podría justificar su propia feature de diagnóstico si se repite.

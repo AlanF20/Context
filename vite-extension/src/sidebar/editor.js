@@ -93,9 +93,9 @@ export function createEditorController() {
         scheduleSync(ctx.id, value, onSave, onSync);
       });
 
-      // Cmd+S / Ctrl+S: immediate save.
+      // Cmd+S / Ctrl+S: immediate save, even with no pending changes.
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        flush(onSave);
+        flush(onSave, { force: true });
       });
     } catch (err) {
       console.error("[ContextHighlighter] Monaco failed:", err);
@@ -105,18 +105,25 @@ export function createEditorController() {
     }
   }
 
-  async function flush(onSave) {
+  /**
+   * Persist the current buffer. Merely mounting Monaco and leaving without
+   * typing must NOT trigger a save — replaceContextFromMarkdown rebuilds
+   * every item and wipes DOM-anchor metadata, breaking re-highlight on
+   * reload for untouched items (feature 34). Skip the save when the buffer
+   * isn't dirty, unless `force` is set (explicit Cmd+S).
+   */
+  async function flush(onSave, { force = false } = {}) {
     clearTimeout(syncTimer);
-    if (editor && currentCtxId) {
-      const value = editor.getValue();
-      buffers[currentCtxId] = value;
-      if (onSave) {
-        await onSave(currentCtxId, value);
-      } else {
-        await Store.replaceContextFromMarkdown(currentCtxId, value);
-      }
-      if (tabDirtyEl) tabDirtyEl.hidden = true;
+    if (!editor || !currentCtxId) return;
+    const value = editor.getValue();
+    buffers[currentCtxId] = value;
+    if (!force && !isDirty(currentCtxId)) return;
+    if (onSave) {
+      await onSave(currentCtxId, value);
+    } else {
+      await Store.replaceContextFromMarkdown(currentCtxId, value);
     }
+    if (tabDirtyEl) tabDirtyEl.hidden = true;
   }
 
   function dispose() {

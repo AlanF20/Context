@@ -493,6 +493,39 @@
       "status": "done"
     },
     {
+      "id": 34,
+      "name": "editor_tab_switch_persistence_bug",
+      "title": "Fix: cambiar a la pestaña Editor rompe la persistencia entre pestañas al recargar",
+      "description": "Al cambiar de la pestaña Vista a la pestaña Editor (Monaco), y luego recargar el panel/página, solo persiste el contenido posterior al cambio de pestaña — el highlight/contenido capturado antes de cambiar a Editor se pierde tras el reload, aunque siga visible mientras no se recargue. Se sospecha del mismo mecanismo de buffer por contexto y su invalidación (editor.invalidate) ya identificado en la feature #30, pero disparado por el switch de pestaña Vista→Editor en vez de por navegación cross-page.",
+      "acceptance_criteria": [
+        "Capturar un resaltado en un sitio real, cambiar a la pestaña Editor sin escribir nada, volver a Vista, y recargar la página: el resaltado se re-pinta igual que si nunca se hubiera visitado el Editor.",
+        "La toolbar flotante de captura sigue mostrando el punto de color del contexto detectado para esa página tras el reload (contextForThisPage sigue encontrando coincidencia por sourceUrl).",
+        "Si el usuario SÍ edita el texto en el Editor y sale de la pestaña, el guardado ocurre como hoy — la pérdida de ancla para ítems realmente editados (spec 004/027) no cambia.",
+        "Cmd+S / Ctrl+S en el Editor sigue guardando de inmediato en cualquier caso, sin regresión.",
+        "El mismo fix se aplica a docEditor (Vista-edit) por consistencia, aunque ese modo no tiene punto de entrada en la UI actual (hallazgo heredado de la feature #30).",
+        "pnpm run build, pnpm run test e init.sh pasan sin errores.",
+        "Nuevo spec E2E Playwright (tests/e2e/034-editor-visit-preserves-anchor.spec.js) verifica el fix contra un sitio real."
+      ],
+      "spec_path": "specs/034-spec-editor_tab_switch_persistence_bug.json",
+      "dependencies": [18, 30],
+      "status": "done"
+    },
+    {
+      "id": 35,
+      "name": "onboarding_modal_blocks_e2e",
+      "title": "Fix: el modal de onboarding (feature #33) bloquea los E2E que abren el side panel en un perfil nuevo",
+      "description": "Descubierto durante el cierre de la feature #34: el modal de onboarding (src/sidebar/onboarding.js) se auto-abre en cualquier perfil de Chromium nuevo (su flag onboardingSeen vive dentro del mismo objeto contextHighlighter en chrome.storage.local, y ningún E2E lo siembra) e intercepta todos los clics (`<dialog>` nativo con `intercepts pointer events`) hasta que se cierra manualmente. Confirmado reproducible independientemente del fix de la feature #34 (se revirtió temporalmente vía git stash y el bloqueo persistió). Rompe en la práctica los specs 028, 030, 031 y 032 en un perfil limpio — todos abren el side panel sin dismissar el modal primero (029 no lo abre, no estaba afectado).",
+      "acceptance_criteria": [
+        "tests/e2e/fixtures.js cierra automáticamente el modal de onboarding en cualquier página cuya URL contenga 'sidebar.html', en la carga inicial y en cualquier reload posterior.",
+        "No se modifica src/sidebar/onboarding.js, src/storage.js, ni los specs 028/029/030/031/032 individualmente — el fix vive solo en fixtures.js.",
+        "pnpm run test:e2e completo pasa sin ningún fallo por 'intercepts pointer events' en un perfil de Chromium nuevo (confirmado: 17/19 passed, 1 flaky no relacionado en 031, 1 failed pre-existente en 029/Medium — reproducido igual revirtiendo este fix, sin relación con el modal de onboarding).",
+        "pnpm run build, pnpm run test e init.sh pasan sin errores."
+      ],
+      "spec_path": "specs/035-spec-onboarding_modal_blocks_e2e.json",
+      "dependencies": [33],
+      "status": "done"
+    },
+    {
       "id": 33,
       "name": "active_reading_rebrand",
       "title": "Rebrand completo: 'Active Reading' — ícono, nombre, y explicación del sistema de categorías",

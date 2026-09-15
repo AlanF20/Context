@@ -1,0 +1,40 @@
+{
+  "id": 35,
+  "status": "implemented",
+  "createdAt": "2026-09-04",
+  "author": "Spec-Writer Agent",
+  "title": "Fix: el modal de onboarding bloquea los E2E que abren el side panel en un perfil nuevo",
+  "description": "El modal de onboarding (feature #33, src/sidebar/onboarding.js) se auto-abre en cualquier perfil de Chromium nuevo porque su flag `onboardingSeen` vive dentro del mismo objeto `contextHighlighter` que `contexts` en chrome.storage.local (src/storage.js:142-153), y ningún E2E lo siembra ni lo cierra. El modal es un `<dialog>` nativo con `showModal()`, por lo que intercepta todos los clics hasta cerrarse — rompiendo `.click()` en cualquier spec que abra `sidebar.html` sin dismissarlo primero. Confirmado independiente de la feature #34 (reproducido con el fix de esa feature revertido vía stash). Un seed único de `onboardingSeen: true` no basta: los specs 028 y 030 sobrescriben el objeto `contextHighlighter` completo (`chrome.storage.local.set({ contextHighlighter: { contexts: {...} } })`) para sembrar sus propios datos, lo que borra el flag y reabre el modal en el siguiente reload. El fix se implementa exclusivamente en `tests/e2e/fixtures.js`, escuchando el evento `context.on('page', ...)` (cubre tanto la página `page` de la fixture como cualquier `context.newPage()` ad-hoc) y, dentro, `page.on('domcontentloaded', ...)` de forma persistente (no una sola vez, para cubrir reloads posteriores a un overwrite de storage) — si la URL contiene `sidebar.html` y el modal aparece, se cierra automáticamente.",
+  "acceptance_criteria": [
+    "tests/e2e/fixtures.js cierra automáticamente el modal de onboarding en cualquier página del contexto de Playwright cuya URL contenga 'sidebar.html', sin que cada spec tenga que hacerlo manualmente.",
+    "El cierre automático funciona tanto en la primera carga de sidebar.html como en un page.reload() posterior (cubre el caso 028/030 donde un overwrite de chrome.storage.local re-abre el modal).",
+    "El cierre automático no interfiere con páginas que NO son sidebar.html (sitios reales externos, about:blank) — no intenta buscar el modal ahí ni añade demoras perceptibles a esas navegaciones.",
+    "pnpm run test:e2e completo (specs 028, 029, 030, 031, 032, 034) pasa en verde en un perfil de Chromium nuevo, sin necesidad de reintentos por el modal de onboarding.",
+    "No se modifica src/sidebar/onboarding.js, src/storage.js, ni los specs 028/029/030/031/032 (el fix vive solo en fixtures.js). El spec 034 puede simplificarse quitando su dismissOnboardingIfOpen() local, ya redundante, como limpieza opcional sin cambiar su comportamiento observable.",
+    "init.sh y pnpm run build siguen pasando sin errores."
+  ],
+  "implementation_plan": {
+    "files_to_edit": [
+      "vite-extension/tests/e2e/fixtures.js"
+    ],
+    "changes": [
+      {
+        "file": "vite-extension/tests/e2e/fixtures.js",
+        "function": "context fixture",
+        "change": "Tras `launchPersistentContext`, registrar `context.on('page', (newPage) => { newPage.on('domcontentloaded', () => autoDismissOnboarding(newPage).catch(() => {})); })`. Definir `autoDismissOnboarding(page)`: si `!page.url().includes('sidebar.html')` retorna de inmediato (evita costo en navegaciones a sitios reales); si no, hace `await page.locator('#onboarding-modal').waitFor({ state: 'visible', timeout: 1500 }).then(() => true).catch(() => false)` y, si el modal apareció, `await page.locator('#onboarding-modal .onboarding-close').click().catch(() => {})`. El listener de domcontentloaded se registra una vez por página pero se dispara en cada recarga/navegación de esa misma página, cubriendo el caso de un modal que se reabre tras un overwrite de storage."
+      },
+      {
+        "file": "vite-extension/tests/e2e/034-editor-visit-preserves-anchor.spec.js",
+        "function": "dismissOnboardingIfOpen (limpieza opcional)",
+        "change": "Ya redundante una vez que fixtures.js lo maneja centralmente. Puede eliminarse (junto a sus 2 call-sites) sin cambiar el comportamiento observable del spec; no es obligatorio para cerrar esta feature."
+      }
+    ]
+  },
+  "out_of_scope": [
+    "Cambiar dónde vive el flag onboardingSeen en el modelo de datos (seguiría dentro de contextHighlighter).",
+    "Tocar src/sidebar/onboarding.js o el comportamiento del modal para usuarios reales.",
+    "Investigar el fallo observado en 029 para el sitio Medium durante la corrida de diagnóstico — no abre sidebar.html, por lo que no está relacionado con este bug (posible flakiness propia del sitio real, ya con retries:1 configurado)."
+  ],
+  "dependencies": [33],
+  "research_path": "docs/research_onboarding_modal_blocks_e2e.md"
+}

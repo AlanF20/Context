@@ -163,6 +163,7 @@ export function createDocEditor() {
 
     ta.addEventListener("blur", async () => {
       clearTimeout(syncTimer);
+      if (!dirtySignalled) return;
       dirtySignalled = false;
       await save(ta.value, { onSync, onClean });
     });
@@ -175,11 +176,16 @@ export function createDocEditor() {
     });
   }
 
+  /**
+   * Persist the textarea's current value. Merely mounting it and leaving
+   * without typing must NOT trigger a save (same failure mode as the Editor
+   * controller, feature 34) — skip when there are no pending changes.
+   */
   async function flush() {
     clearTimeout(syncTimer);
-    if (taRef && currentCtxId) {
-      await save(taRef.value);
-    }
+    if (!taRef || !currentCtxId || !dirtySignalled) return;
+    dirtySignalled = false;
+    await save(taRef.value);
   }
 
   function dispose() {
