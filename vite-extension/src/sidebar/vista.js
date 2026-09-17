@@ -17,25 +17,25 @@
  *    onDirty()       — called on the first 'input' event (debounce in flight).
  *    onClean()       — called after each successful save.
  */
-import { createElement, NotebookPen, ExternalLink } from "lucide";
+import { createElement, ExternalLink } from "lucide";
 import { Store } from "./store.js";
 import { renderMarkdown } from "./markdown.js";
+import pennyDrawing from "../assets/penny-drawing.png";
 
 function emptyState() {
   const s = document.createElement("div");
   s.className = "state";
-  const glyph = document.createElement("div");
-  glyph.className = "glyph";
-  const icon = createElement(NotebookPen, { width: 20, height: 20 });
-  icon.style.pointerEvents = "none";
-  glyph.appendChild(icon);
+  const mascot = document.createElement("img");
+  mascot.className = "state-mascot";
+  mascot.src = pennyDrawing;
+  mascot.alt = "";
   const title = document.createElement("div");
   title.className = "title";
   title.textContent = "Contexto vacío";
   const hint = document.createElement("div");
   hint.className = "hint";
   hint.textContent = 'Resalta texto en una página y pulsa "+" para llenarlo.';
-  s.append(glyph, title, hint);
+  s.append(mascot, title, hint);
   return s;
 }
 

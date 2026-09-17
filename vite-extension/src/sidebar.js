@@ -12,7 +12,8 @@
  * Data flows through chrome.storage.local, accessed via store.js (Store).
  * ---------------------------------------------------------------------------
  */
-import { createElement, Sparkles, Download, ChevronDown } from "lucide";
+import { createElement, Download, ChevronDown } from "lucide";
+import pennyWaving from "./assets/penny-waving.png";
 import { $ } from "./sidebar/dom.js";
 import { Store } from "./sidebar/store.js";
 import { initTheme } from "./sidebar/theme.js";
@@ -217,18 +218,17 @@ async function renderMain() {
     ctxHeader.hidden = true;
     const stateEl = document.createElement("div");
     stateEl.className = "state";
-    const glyph = document.createElement("div");
-    glyph.className = "glyph";
-    const sparklesIcon = createElement(Sparkles, { width: 20, height: 20 });
-    sparklesIcon.style.pointerEvents = "none";
-    glyph.appendChild(sparklesIcon);
+    const mascot = document.createElement("img");
+    mascot.className = "state-mascot";
+    mascot.src = pennyWaving;
+    mascot.alt = "";
     const stateTitle = document.createElement("div");
     stateTitle.className = "title";
     stateTitle.textContent = "Sin contextos todavía";
     const stateHint = document.createElement("div");
     stateHint.className = "hint";
     stateHint.textContent = 'Crea uno con "+" o resalta texto en una página.';
-    stateEl.append(glyph, stateTitle, stateHint);
+    stateEl.append(mascot, stateTitle, stateHint);
     bodyEl.innerHTML = "";
     bodyEl.appendChild(stateEl);
     return;

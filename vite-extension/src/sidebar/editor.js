@@ -16,6 +16,7 @@
  */
 import { Store } from "./store.js";
 import { escapeHtml } from "./dom.js";
+import pennySad from "../assets/penny-sad.png";
 
 export function createEditorController() {
   let editor = null;
@@ -100,7 +101,9 @@ export function createEditorController() {
     } catch (err) {
       console.error("[ContextHighlighter] Monaco failed:", err);
       host.innerHTML =
-        '<div class="state"><div class="title">No se pudo cargar el editor</div>' +
+        '<div class="state">' +
+        `<img class="state-mascot" src="${pennySad}" alt="" />` +
+        '<div class="title">No se pudo cargar el editor</div>' +
         '<div class="hint">Verifica la carpeta vendor/monaco.</div></div>';
     }
   }

@@ -29,6 +29,7 @@
     </div>
 
     <dialog id="confirm-delete-modal" aria-modal="true" aria-labelledby="modal-question">
+      <img class="modal-mascot" src="./assets/penny-warning.png" alt="" />
       <p id="modal-question" class="modal-question">
         ¿Eliminar <strong class="modal-ctx-name"></strong>?
       </p>
@@ -43,9 +44,16 @@
       aria-modal="true"
       aria-labelledby="onboarding-title"
     >
-      <h2 id="onboarding-title" class="onboarding-title">
-        Lectura activa: cómo funciona
-      </h2>
+      <div class="onboarding-header">
+        <img
+          class="onboarding-mascot"
+          src="./assets/penny-confused.png"
+          alt=""
+        />
+        <h2 id="onboarding-title" class="onboarding-title">
+          Lectura activa: cómo funciona
+        </h2>
+      </div>
       <p class="onboarding-intro">
         La lectura activa es una forma de leer en la que no solo marcas
         texto, sino que decides qué rol juega cada fragmento mientras lees:
