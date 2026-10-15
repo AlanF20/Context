@@ -791,3 +791,39 @@ igual revirtiendo `fixtures.js` vía stash; ese spec nunca abre el side panel). 
 **Pendiente:** el fallo de 029/Medium ("never reached 'anchored' status") queda fuera de alcance —
 posible flakiness real del sitio (paywall/contenido cambiado), no relacionado con el modal de
 onboarding. Podría justificar su propia feature de diagnóstico si se repite.
+
+---
+
+# Session — Feature #37 pdf_highlight (2026-10-06 → 2026-10-08)
+
+> Reset this file at the end of every session by appending its content to `history.md`.
+> Keep it updated **in real time** while working, not at the end.
+
+- **Feature in progress:** #37 pdf_highlight
+- **Started:** 2026-10-06
+- **Active agent:** Implementer
+- **Retry count:** 0 / 3
+- **Spec approved by human:** sí (2026-10-08)
+
+## Plan
+
+1. init.sh ✅
+2. Feature #37 añadida a feature_list.json (in_progress)
+3. Interviewer → Researcher → Spec-Writer → ⛔ gate humano
+
+## Log
+
+- 2026-10-06 init.sh verde. ID 37 (no 36: existe test sin registrar 036-replace-from-markdown-preserves-anchors.test.js + cambios sin commitear en storage.js/editor.js ajenos a esta feature).
+
+- 2026-10-06 Interviewer: botón manual (sin auto-redirect); fuentes http(s) + file://; re-anclar por página+quote; Vista/export como web + nº de página.
+- 2026-10-06 Researcher lanzado → docs/research_pdf_highlight.md
+- 2026-10-06 Research listo (docs/research_pdf_highlight.md). Spec draft: specs/037-spec-pdf_highlight.json.
+- 2026-10-08 Spec 037 aprobada por el usuario.
+- 2026-10-08 Tester: docs/test_pdf_highlight.md.
+- 2026-10-08 Baseline (antes de tocar nada): Vitest 82/82; E2E 19 passed / 5 failed preexistentes (029 AnkiWeb, 029 Medium, 031 fast-save toast, 031 resize reclamp, 034 'Editar un ítem no perturba…').
+- 2026-10-08 Paso 1 (spike opción A): plugin vite-plugins/isolate-content-script.js. Control sin plugin → chunk compartido `paint-*.js` + loader con import(); con plugin → content.js autocontenido. Opción A adoptada.
+- 2026-10-08 Paso 2 (refactor content.js → src/capture/{ui,markdown,ranges,paint}.js): E2E idéntico al baseline (mismos 5 fallos, 19 passed).
+- 2026-10-08 Paso 3: storage.js (isPdfItem, pdfFilename, page/sourceTitle, _Fuente: x.pdf, p. N_) + content-storage.js resincronizado. Vitest 108/108.
+
+Tester → docs/test_pdf_highlight.md; luego Implementer (paso 1: spike aislamiento de chunks).
+

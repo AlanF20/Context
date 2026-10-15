@@ -1,0 +1,89 @@
+{
+  "id": 37,
+  "status": "implemented",
+  "createdAt": "2026-10-06",
+  "author": "Spec-Writer Agent",
+  "title": "Resaltar texto en archivos PDF con un visor propio (PDF.js)",
+  "description": "El visor nativo de PDF de Chrome no admite content scripts, así que hoy no se puede capturar nada en un PDF. Esta feature añade una página de extensión `src/viewer.html` construida con `pdfjs-dist` (componente `PDFViewer`, capa de texto seleccionable) a la que el usuario llega manualmente ('Abrir en Active Reading') desde una pestaña con un PDF http(s) o file://. Dentro del visor se reutiliza el mismo flujo de captura que en la web (toolbar de categorías, popup con combobox de contexto, anidar, comentario, fast-save), extraído de `content.js` a módulos `src/capture/*` compartibles sin romper el bundle autocontenido del content script. Los ítems de PDF guardan `sourceUrl` = URL original del PDF, más `page` (base 1) y `sourceTitle` (nombre de archivo), y se re-anclan por página (cita + prefijo/sufijo con `findMatch`) cada vez que PDF.js renderiza la capa de texto de esa página. En el panel, los ítems de PDF se agrupan bajo el nombre del archivo, muestran `_Fuente: archivo.pdf, p. N_` y 'ir al origen' abre/enfoca el visor en la página e ítem correctos. Decisiones del Interviewer: entrada solo manual (sin auto-redirect), fuentes http(s) + file://, persistencia con re-anclaje por página+cita, Vista/export como web + nº de página. Investigación completa: docs/research_pdf_highlight.md.",
+  "acceptance_criteria": [
+    "Paso 0 (refactor sin cambio de comportamiento): la UI de captura, la conversión fragment→Markdown, los helpers de rangos (extractRangeContext/buildTextIndex/rangeFromOffsets, parametrizados por `root`) y el pintor CSS Highlight se extraen de `content.js` a `src/capture/*` con un `adapter` (store, getSourceUrl, getCaptureMeta, getAnchorRoot, afterSave). Los E2E existentes 029, 031, 032 y 034 siguen en verde tras este paso y antes de cualquier código de PDF.",
+    "El bundle construido de `content.js` (dist/assets/content.js-*.js) sigue siendo autocontenido: un test de guardarraíl falla si contiene un `import`/`export` de nivel superior. El aislamiento se logra con un plugin Vite que duplica en el grafo de content.js los módulos compartidos (opción A del research, validada con un spike); si el spike falla, se usan copias manuales estilo content-storage.js (opción B) y se documenta en progress/current.md.",
+    "Existe una página de extensión `src/viewer.html` + `viewer.css` + `viewer.js` (HTML/CSS/JS separados, sin inline) incluida en el build vía `build.rollupOptions.input`. Usa `pdfjs-dist` con versión exacta fijada, worker importado con `?url`, cMaps/standard_fonts/wasm copiados a `public/vendor/pdfjs/` por un script (no a mano), sin scripting de PDF y sin cambios al CSP por defecto de MV3.",
+    "`viewer.html?file=<url codificada>` carga el PDF y muestra todas sus páginas con scroll, indicador 'página X / N' y zoom básico (+/−). `#page=N` al abrir posiciona en esa página.",
+    "Entrada manual: (a) en el side panel aparece un botón 'Abrir en Active Reading' cuando la URL de la pestaña activa coincide con `/\\.pdf($|[?#])/i` (http, https o file); (b) el menú contextual del icono de la extensión (`contexts: ['action']`, permiso `contextMenus`) ofrece la misma acción en cualquier pestaña http(s)/file. Ambas reemplazan la pestaña actual por el visor con `?file=<url de la pestaña sin hash>`. Chrome nunca redirige PDFs automáticamente.",
+    "PDFs `file://`: si `chrome.extension.isAllowedFileSchemeAccess()` es false, el visor no intenta cargar y muestra un aviso en español explicando cómo activar 'Permitir acceso a URLs de archivo', con un botón que abre la página de detalles de la extensión. Con el acceso activado, el PDF local carga y se puede resaltar igual que uno web (verificación manual).",
+    "Errores de carga (no es un PDF, 404/403, PDF con contraseña) muestran un estado de error amable en español con un enlace 'Abrir en el visor de Chrome' a la URL original; no hay excepciones sin capturar en consola.",
+    "Al seleccionar texto dentro de la capa de texto de UNA página con el ratón, aparece la misma toolbar de captura que en la web; el popup (contexto, categoría, anidar, comentario, Enter guarda) y el fast-save funcionan igual. Si la selección cruza dos páginas o sale de la capa de texto, no se guarda y la toolbar muestra 'Selecciona texto dentro de una sola página'.",
+    "Un ítem capturado en el visor se guarda con `sourceUrl` = URL original del PDF (sin hash, nunca la URL chrome-extension://), `page` = número de página (entero ≥ 1), `sourceTitle` = nombre de archivo decodificado, `source` = ese nombre, y `rangeText`/`rangePrefix`/`rangeSuffix`/`rangeStart`/`rangeEnd` relativos al texto de la capa de esa página (`rangeText = range.toString()`). Los ítems web existentes no cambian (`page`/`sourceTitle` ausentes o null).",
+    "Al recargar el visor o reabrir el mismo PDF (misma URL), cada ítem se re-pinta con su color de categoría cuando la capa de texto de su página se renderiza (evento `textlayerrendered`), incluyendo tras zoom o tras salir y volver a una página. Un ítem cuya página aún no se ha renderizado queda `pending`, no `failed`; solo es `failed` si su página se renderizó y no se encontró la cita.",
+    "El strip de estado de anclaje del panel funciona con el visor abierto en la pestaña activa (pending/anchored/failed), con fallback a `runtime.sendMessage` filtrado por tabId si `tabs.sendMessage` no alcanza la página de extensión.",
+    "`content.js` ignora los ítems con `page` entero en su sesión de anclaje, de modo que abrir el PDF en el visor nativo de Chrome no marca esos ítems como 'no encontrado' en el panel.",
+    "Vista: los ítems de PDF consecutivos con el mismo `sourceUrl` se agrupan bajo un encabezado con el nombre del archivo (`sourceTitle` o derivado de la URL), nunca vacío aunque sea file://. Cada nota de texto de PDF muestra en cursiva 'Fuente: archivo.pdf, p. N' bajo la nota (y su comentario).",
+    "Click en el encabezado de grupo de un PDF: si ya hay una pestaña con el visor de ese PDF, se enfoca y hace scroll a la página/ítem; si no, se abre una pestaña nueva con `viewer.html?file=…#page=N&item=<id>` y, una vez anclado, se hace scroll al ítem. Nunca se abre la URL cruda del PDF en el visor nativo.",
+    "Contrato Markdown: `buildMd` emite `_Fuente: <nombre>, p. N_` (con `_` del nombre escapado como `\\_`) justo después de cada nota de texto de PDF y de su comentario; los subtítulos de PDF y todos los ítems web NO emiten la línea (salida idéntica a hoy para contextos sin PDF). `parseMd` extrae `source` y `page` de esa línea, des-escapa `\\_`, y sigue aceptando `_Fuente: dominio_` sin página. `parseMd(buildMd(ctx))` conserva texto, categoría, comentario, `source` y `page`.",
+    "`replaceContextFromMarkdown` conserva `page` y `sourceTitle` del ítem previo (coincidencia exacta y posicional), igual que hoy conserva `sourceUrl` y los campos de anclaje; si el usuario cambia la página en la línea `_Fuente:_`, gana el valor editado. `content-storage.js` queda resincronizado con `storage.js`.",
+    "Export Anki: el campo de fuente de un ítem de PDF es 'Fuente: archivo.pdf, p. N'; los ítems web no cambian.",
+    "Vitest nuevo: tests/037-*.test.js cubriendo ida y vuelta Markdown con página (con/sin comentario, escape de `_`, subtítulo sin línea, legado sin página), replaceContextFromMarkdown conservando page/sourceTitle, helpers puros de URL del visor/nombre de archivo/isPdfItem, findMatch sobre texto de capa concatenado sin separadores, y el guardarraíl de bundle de content.js. Ningún test existente se modifica para que pase.",
+    "E2E nuevo tests/e2e/037-pdf-highlight.spec.js con un PDF fixture versionado de 3 páginas servido por un servidor HTTP local de Node: abrir el visor en la página 2, seleccionar por arrastre con page.mouse, guardar, verificar en storage `page === 2` y `sourceUrl` correcto, recargar y verificar repintado (CSS.highlights), verificar en la Vista el encabezado 'sample.pdf' y 'Fuente: sample.pdf, p. 2', y que el click en el encabezado enfoca/abre el visor. Un segundo test verifica el aviso de acceso a file:// desactivado.",
+    "`./init.sh`, `pnpm run build`, `pnpm run test` y `pnpm run test:e2e` pasan sin errores (salvo fallos preexistentes documentados ajenos a esta feature)."
+  ],
+  "implementation_plan": {
+    "order": [
+      "1. Spike de aislamiento de chunks (plugin Vite opción A) + guardarraíl de bundle de content.js.",
+      "2. Refactor content.js → src/capture/* (sin cambio de comportamiento); E2E 029/031/032/034 en verde.",
+      "3. storage.js: campos page/sourceTitle, helpers isPdfItem/pdfFilename, buildMd/parseMd/replaceContextFromMarkdown; resincronizar content-storage.js; Vitest 037.",
+      "4. pdfjs-dist + script de copia de assets + viewer.html/css/js + src/viewer/*; captura y anclaje por página.",
+      "5. background.js (contextMenus) + manifest; botón en el panel; anchor-status y source-nav para PDF; Vista con nombre de archivo; Anki.",
+      "6. E2E 037 + fixture PDF; revisión completa."
+    ],
+    "files_to_create": [
+      "vite-extension/src/capture/ui.js",
+      "vite-extension/src/capture/markdown.js",
+      "vite-extension/src/capture/ranges.js",
+      "vite-extension/src/capture/paint.js",
+      "vite-extension/src/viewer.html",
+      "vite-extension/src/viewer.css",
+      "vite-extension/src/viewer.js",
+      "vite-extension/src/viewer/pdf.js",
+      "vite-extension/src/viewer/anchoring.js",
+      "vite-extension/src/viewer/source.js",
+      "vite-extension/scripts/copy-pdfjs-assets.js (o similar)",
+      "vite-extension/tests/037-*.test.js",
+      "vite-extension/tests/e2e/037-pdf-highlight.spec.js",
+      "vite-extension/tests/e2e/fixtures/sample.pdf"
+    ],
+    "files_to_edit": [
+      "vite-extension/src/content.js",
+      "vite-extension/src/storage.js",
+      "vite-extension/src/content-storage.js",
+      "vite-extension/src/background.js",
+      "vite-extension/manifest.json (o su config CRXJS)",
+      "vite-extension/vite.config.js",
+      "vite-extension/package.json",
+      "vite-extension/src/sidebar.html / sidebar.js / sidebar.css (botón 'Abrir en Active Reading')",
+      "vite-extension/src/sidebar/vista.js",
+      "vite-extension/src/sidebar/source-nav.js",
+      "vite-extension/src/sidebar/anchor-status.js",
+      "vite-extension/src/sidebar/export-formats.js"
+    ]
+  },
+  "decisions": {
+    "chunk_isolation": "Opción A (plugin Vite) validada con spike; fallback a opción B (copias manuales) si el spike falla.",
+    "page_in_vista": "Línea por nota 'Fuente: archivo.pdf, p. N' (la Vista y el Markdown siguen siendo el mismo render), no badge aparte.",
+    "cross_page_selection": "Rechazar con mensaje, no recortar.",
+    "entry_button_visibility": "Botón del panel solo con la heurística .pdf; el menú contextual del icono está siempre disponible para PDFs sin extensión .pdf.",
+    "anki_page": "Sí, añadir ', p. N' en ítems de PDF."
+  },
+  "out_of_scope": [
+    "Redirección automática de PDFs al visor; arrastrar y soltar o selector de archivos; PDFs blob:/data: y adjuntos de Gmail/Drive.",
+    "OCR / PDFs escaneados (solo aviso no bloqueante), PDFs con contraseña (solo mensaje), formularios XFA y scripting de PDF.",
+    "Selecciones que cruzan páginas.",
+    "Escribir anotaciones en el archivo PDF o descargar el PDF con resaltados.",
+    "Búsqueda dentro del PDF, miniaturas, índice/esquema e impresión.",
+    "PDFs detrás de login que no carguen desde el origen de la extensión (se muestra el error + enlace al visor nativo).",
+    "Normalización/deduplicación de URLs del mismo PDF.",
+    "Retirar content-storage.js (habilitado por la opción A, pero en otra feature)."
+  ],
+  "dependencies": [4, 27, 31, 32],
+  "research_path": "docs/research_pdf_highlight.md"
+}

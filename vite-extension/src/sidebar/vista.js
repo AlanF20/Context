@@ -66,7 +66,13 @@ export function groupItemsBySource(items) {
  * scroll to this group's first highlight.
  */
 function sourceGroupHeader(group) {
-  const hostname = Store.hostnameFromUrl(group.sourceUrl);
+  const first = group.items[0];
+  // PDF groups (feature 37) are labeled by file name: file:// URLs have no
+  // hostname, and the PDF's host says little about which document it is.
+  const isPdf = Store.isPdfItem(first);
+  const hostname = isPdf
+    ? first.sourceTitle || Store.pdfFilename(group.sourceUrl)
+    : Store.hostnameFromUrl(group.sourceUrl);
   const header = document.createElement("div");
   header.className = "vista-source-header";
   const btn = document.createElement("button");
@@ -75,7 +81,8 @@ function sourceGroupHeader(group) {
   btn.setAttribute("aria-label", `Ir a ${hostname}`);
   btn.title = hostname;
   btn.dataset.sourceUrl = group.sourceUrl;
-  btn.dataset.itemId = group.items[0].id;
+  btn.dataset.itemId = first.id;
+  if (isPdf) btn.dataset.page = String(first.page);
   const icon = createElement(ExternalLink, { width: 13, height: 13 });
   icon.style.pointerEvents = "none";
   const label = document.createElement("span");

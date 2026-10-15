@@ -534,6 +534,16 @@
       "spec_path": "specs/033-spec-active_reading_rebrand.json",
       "dependencies": [],
       "status": "done"
+    },
+    {
+      "id": 37,
+      "name": "pdf_highlight",
+      "title": "Resaltar texto en archivos PDF",
+      "description": "Permitir capturar resaltados en documentos PDF. El visor nativo de Chrome no admite content scripts, por lo que se requiere un visor propio dentro de la extensión (PDF.js) con capa de texto seleccionable, reutilizando el flujo de captura (icono +, popup de contexto/categoría) y re-anclando los resaltados por página al reabrir el PDF.",
+      "acceptance_criteria": [],
+      "spec_path": "specs/037-spec-pdf_highlight.json",
+      "dependencies": [],
+      "status": "done"
     }
   ],
   "evaluations": [

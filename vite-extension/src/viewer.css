@@ -1,0 +1,191 @@
+/* viewer.css — PDF viewer page (feature 37). */
+@import "pdfjs-dist/web/pdf_viewer.css";
+/* Capture toolbar/popup + ::highlight(ch-hl-*) colors, shared with web pages. */
+@import "./content.css";
+
+:root {
+  --vw-bg: #ecebe6;
+  --vw-surface: #ffffff;
+  --vw-text: #1f1e1b;
+  --vw-muted: #6b6a63;
+  --vw-border: #d9d7cf;
+  --vw-accent: #5b57e8;
+  --vw-toolbar-h: 44px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vw-bg: #1c1c1f;
+    --vw-surface: #26262a;
+    --vw-text: #ecebe6;
+    --vw-muted: #a3a29b;
+    --vw-border: #3a3a40;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--vw-bg);
+  color: var(--vw-text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.vw-toolbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--vw-toolbar-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--vw-surface);
+  border-bottom: 1px solid var(--vw-border);
+  z-index: 10;
+}
+
+.vw-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.vw-pages,
+.vw-zoom-level {
+  color: var(--vw-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.vw-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vw-zoom-level {
+  min-width: 3.5em;
+  text-align: center;
+}
+
+.vw-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--vw-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vw-text);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.vw-btn:hover {
+  border-color: var(--vw-accent);
+}
+
+.vw-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.vw-native {
+  color: var(--vw-accent);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.vw-native:hover {
+  text-decoration: underline;
+}
+
+.vw-notice {
+  position: fixed;
+  top: calc(var(--vw-toolbar-h) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100% - 32px));
+  padding: 8px 14px;
+  border: 1px solid var(--vw-border);
+  border-radius: 8px;
+  background: var(--vw-surface);
+  color: var(--vw-muted);
+  z-index: 11;
+}
+
+/* PDF.js requires an absolutely positioned scroll container. */
+.vw-container {
+  position: absolute;
+  inset: var(--vw-toolbar-h) 0 0 0;
+  overflow: auto;
+}
+
+.vw-state {
+  position: fixed;
+  inset: var(--vw-toolbar-h) 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--vw-bg);
+  z-index: 12;
+}
+
+.vw-state[hidden],
+.vw-notice[hidden],
+.vw-native[hidden] {
+  display: none;
+}
+
+.vw-state-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.vw-state-body {
+  margin: 0;
+  max-width: 480px;
+  color: var(--vw-muted);
+}
+
+.vw-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.vw-state-action {
+  padding: 8px 14px;
+  border: 1px solid var(--vw-accent);
+  border-radius: 8px;
+  background: var(--vw-accent);
+  color: #fff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.vw-state-action.ghost {
+  background: transparent;
+  color: var(--vw-accent);
+}
+
+/* Invalid-selection hint reuses the toolbar shell (capture/ui.js). */
+.ch-root.ch-toolbar.ch-toolbar-msg {
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}

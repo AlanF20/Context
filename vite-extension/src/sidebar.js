@@ -28,6 +28,7 @@ import { createAnchorStatus } from "./sidebar/anchor-status.js";
 import { EXPORT_FORMATS } from "./sidebar/export-formats.js";
 import { createExportMenu } from "./sidebar/export-menu.js";
 import { goToSource } from "./sidebar/source-nav.js";
+import { initPdfEntry } from "./sidebar/pdf-entry.js";
 
 const railList = $("#rail-list");
 const railAdd = $("#rail-add");
@@ -35,6 +36,7 @@ const ctxHeader = $("#ctx-header");
 const bodyEl = $("#body");
 const themeToggle = $("#theme-toggle");
 const onboardingHelpBtn = $("#onboarding-help-btn");
+const pdfEntryBanner = $("#pdf-entry");
 
 // ---- State ----
 let contexts = [];
@@ -57,6 +59,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.addEventListener("keydown", onGlobalKeydown);
   bodyEl.addEventListener("click", onBodyClick);
   anchorStatus.init();
+  initPdfEntry(pdfEntryBanner);
 
   // Pre-select the context requested by a fast-save from the capture toolbar.
   const nav = await chrome.storage.local.get('CH_NAV');
@@ -263,7 +266,8 @@ async function renderMain() {
 function onBodyClick(e) {
   const btn = e.target.closest(".vista-source-link");
   if (!btn) return;
-  goToSource({ sourceUrl: btn.dataset.sourceUrl, itemId: btn.dataset.itemId });
+  const page = btn.dataset.page ? Number(btn.dataset.page) : null;
+  goToSource({ sourceUrl: btn.dataset.sourceUrl, itemId: btn.dataset.itemId, page });
 }
 
 function countItems(ctx) {

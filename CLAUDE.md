@@ -94,11 +94,15 @@ content script de verdad lo detecta. Esto ya pasó una vez (feature 31).
 
 | Archivo | Estado | Responsabilidad |
 |---|---|---|
-| `manifest.json` | ✅ | MV3 (gestionado por CRXJS): permisos `storage`+`sidePanel`, host `<all_urls>`, content script, side panel, service worker. |
-| `src/background.js` | ✅ | Service worker; abre el side panel al click del icono. |
+| `manifest.json` | ✅ | MV3 (gestionado por CRXJS): permisos `storage`+`sidePanel`+`contextMenus`, host `<all_urls>`, content script, side panel, service worker. |
+| `src/background.js` | ✅ | Service worker; abre el side panel al click del icono; menú contextual del icono "Abrir PDF en Active Reading" (feature 37). |
 | `src/storage.js` | ✅ | Capa de datos sobre `chrome.storage.local`. Módulo ES con exports nombrados: modelo, `buildMd`/`parseMd`, categorías de color. |
 | `src/content-storage.js` | ✅ | Copia manual **completa** de `storage.js` para el content script (Rollup extraería un chunk compartido que Chrome ejecuta como WAR sin acceso a `chrome.storage`). **Debe resincronizarse a mano** (`cp storage.js content-storage.js`, luego restaurar el header propio del archivo) cada vez que cambie `storage.js` — un desincronizado no lo detecta Vitest (importa `storage.js` directo), solo un E2E real. |
-| `src/content.js` | ✅ | Content script (IIFE clásico): selección → icono `+` → popup de captura (combobox de contexto, 4 categorías de color, anidar, Enter guarda) → resaltado en la página. |
+| `src/content.js` | ✅ | Content script web: cablea `capture/ui.js` con el adapter web + sesión de re-anclaje por URL (spec 027) y mensajes del panel. Ignora ítems de PDF (`page` entero). |
+| `src/capture/{ui,markdown,ranges,paint}.js` | ✅ | UI de captura compartida (toolbar, popup, toast/comentario) vía `initCaptureUI(adapter)`, fragment→Markdown, offsets de texto ↔ Range, pintor CSS Highlight. Los usan `content.js` y el visor PDF (feature 37). |
+| `src/viewer.{html,css,js}` + `src/viewer/{pdf,anchoring,source}.js` | ✅ | Visor PDF propio (pdfjs-dist, versión fijada): `viewer.html?file=<url>#page=N&item=<id>`, captura por página, re-anclaje en `textlayerrendered`. `source.js` = helpers puros de URL (sin pdfjs). |
+| `vite-plugins/isolate-content-script.js` | ✅ | Da a cada módulo importado por `content.js` un id propio (`?ch-content`) para que Rollup lo inlinee y nunca cree un chunk compartido. Guardarraíl: `tests/037-content-bundle-guard.test.js`. |
+| `vite-plugins/copy-pdfjs-assets.js` | ✅ | Copia cmaps/fonts/wasm/iccs de `pdfjs-dist` a `public/vendor/pdfjs/` (git-ignored) al iniciar build/dev. |
 | `src/content.css` | ✅ | Estilos del popup/icono/resaltado, scoped en `.ch-root`. Highlight por categoría: `.ch-hl-{title,idea,argument,evidence}`. |
 | `src/sidebar.html` | ✅ | Solo estructura: rail + main. `<link>` a `sidebar.css`, `<script type="module">` a `sidebar.js`. |
 | `src/sidebar.css` | ✅ | Tokens (claro/oscuro) + estilos del panel. |
@@ -109,6 +113,7 @@ content script de verdad lo detecta. Esto ya pasó una vez (feature 31).
 | `src/sidebar/theme.js` | ✅ | `initTheme` (toggle claro/oscuro, persistido en localStorage). |
 | `src/sidebar/rail.js` | ✅ | `renderRail` (chips de contexto). |
 | `src/sidebar/vista.js` | ✅ | `renderVista` (lista de ítems con badges semánticos y acciones inline editar/borrar). |
+| `src/sidebar/{pdf-entry,viewer-tabs}.js` | ✅ | Banner "Abrir en Active Reading" para pestañas `.pdf`; localizar pestañas del visor (`runtime.getContexts`) para ir al origen. |
 | `src/sidebar/editor.js` | ✅ | `createEditorController` (Monaco oscuro, sync en vivo, buffers por contexto). |
 | `public/vendor/monaco/vs/` | ✅ | Monaco vendored (su AMD loader no es compatible con Vite). |
 
@@ -119,7 +124,8 @@ content script de verdad lo detecta. Esto ya pasó una vez (feature 31).
   "id","name","color","createdAt",
   "items": [
     { "id","type":"subtitle|text","category":"title|idea|argument|evidence|null",
-      "text","linkedSubtitleId","source","sourceUrl","createdAt" }
+      "text","linkedSubtitleId","source","sourceUrl","createdAt",
+      "page?","sourceTitle?" }   // solo ítems de PDF (feature 37)
   ]
 }}}
 ```

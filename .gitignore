@@ -2,7 +2,12 @@ vite-extension/node_modules/
 
 
 vite-extension/dist/
+# Copied from node_modules/pdfjs-dist at build time (vite-plugins/copy-pdfjs-assets.js)
+vite-extension/public/vendor/pdfjs/
 
 harness-toolkit/
 
 store/*.zip
+
+.DS_Store
+.claude/

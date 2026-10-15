@@ -70,7 +70,7 @@ function buildAnkiRows(ctx) {
       const back = [
         it.text,
         it.comment ? `Comentario: ${it.comment}` : null,
-        it.source ? `Fuente: ${it.source}` : null,
+        it.source ? `Fuente: ${it.source}${Store.isPdfItem(it) ? `, p. ${it.page}` : ""}` : null,
       ]
         .filter(Boolean)
         .join(" — ");

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Active Reading — PDF</title>
+    <link rel="stylesheet" href="viewer.css" />
+  </head>
+  <body>
+    <header class="vw-toolbar">
+      <span id="vw-title" class="vw-title">PDF</span>
+      <div class="vw-pages" aria-live="polite">
+        <span id="vw-page">–</span> / <span id="vw-pages">–</span>
+      </div>
+      <div class="vw-zoom">
+        <button id="vw-zoom-out" class="vw-btn" type="button" aria-label="Alejar" title="Alejar">−</button>
+        <span id="vw-zoom-level" class="vw-zoom-level">100%</span>
+        <button id="vw-zoom-in" class="vw-btn" type="button" aria-label="Acercar" title="Acercar">+</button>
+      </div>
+      <a id="vw-native" class="vw-native" hidden>Abrir en el visor de Chrome</a>
+    </header>
+
+    <div id="vw-notice" class="vw-notice" role="status" hidden></div>
+
+    <div id="viewerContainer" class="vw-container">
+      <div id="viewer" class="pdfViewer"></div>
+    </div>
+
+    <section id="vw-state" class="vw-state" hidden>
+      <h1 id="vw-state-title" class="vw-state-title"></h1>
+      <p id="vw-state-body" class="vw-state-body"></p>
+      <div id="vw-state-actions" class="vw-state-actions"></div>
+    </section>
+
+    <script type="module" src="viewer.js"></script>
+  </body>
+</html>

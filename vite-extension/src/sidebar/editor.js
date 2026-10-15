@@ -1,16 +1,22 @@
 /**
  * editor.js — the Editor tab: a Monaco Markdown editor that edits the whole
- * document and syncs live back into the structured store.
+ * document and syncs back into the structured store.
  *
  * Monaco is bundled locally (vendor/monaco) because MV3 forbids remote code,
  * and is loaded lazily via its AMD loader the first time the editor opens.
  * The editor is always dark, regardless of the panel theme.
  *
+ * Saving is manual-only: typing never persists on its own (no debounce).
+ * Cmd+S / Ctrl+S is the only way to save while actively editing. sidebar.js
+ * also calls flush() (force:false) as a safety net when the user navigates
+ * away from this context/tab with unsaved edits, so work is never silently
+ * lost — but that's a "don't discard on exit" guard, not an autosave.
+ *
  * createEditorController() returns a small stateful API so the main controller
  * doesn't have to know about Monaco internals.
  *
  * mount() options:
- *   onSync(ctx)  — called after each debounced save (refresh rail/counter).
+ *   onSync(ctx)  — called after each successful save (refresh rail/counter).
  *   onSave(ctxId, md) — async; replaces the direct Store.replaceContextFromMarkdown
  *                       call so sidebar.js can inject history snapshotting.
  */
@@ -21,32 +27,19 @@ import pennySad from "../assets/penny-sad.png";
 export function createEditorController() {
   let editor = null;
   let monacoReady = null;
-  let syncTimer = null;
   let currentCtxId = null;
   let tabDirtyEl = null;
+  let currentOnSync = null;
   const buffers = {};
 
   function setStatus(el, md) {
     if (el) el.textContent = `Markdown · UTF-8 · ${md.split("\n").length} líneas`;
   }
 
-  function scheduleSync(ctxId, value, onSave, onSync) {
-    clearTimeout(syncTimer);
-    syncTimer = setTimeout(async () => {
-      if (onSave) {
-        await onSave(ctxId, value);
-      } else {
-        await Store.replaceContextFromMarkdown(ctxId, value);
-      }
-      // Mark clean after successful save.
-      if (tabDirtyEl) tabDirtyEl.hidden = true;
-      if (onSync) onSync();
-    }, 350);
-  }
-
   async function mount(mountEl, ctx, { onSync, onSave } = {}) {
     dispose();
     currentCtxId = ctx.id;
+    currentOnSync = onSync || null;
     const md = buffers[ctx.id] != null ? buffers[ctx.id] : Store.buildMd(ctx);
 
     const wrap = document.createElement("div");
@@ -89,12 +82,12 @@ export function createEditorController() {
         const value = editor.getValue();
         buffers[ctx.id] = value;
         setStatus(statusBar, value);
-        // Show dirty indicator on change.
+        // Show dirty indicator on change. No auto-save: only Cmd+S (or a
+        // navigate-away safety flush from sidebar.js) persists this.
         if (tabDirtyEl) tabDirtyEl.hidden = false;
-        scheduleSync(ctx.id, value, onSave, onSync);
       });
 
-      // Cmd+S / Ctrl+S: immediate save, even with no pending changes.
+      // Cmd+S / Ctrl+S: the only save while actively editing, even with no pending changes.
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         flush(onSave, { force: true });
       });
@@ -109,14 +102,13 @@ export function createEditorController() {
   }
 
   /**
-   * Persist the current buffer. Merely mounting Monaco and leaving without
-   * typing must NOT trigger a save — replaceContextFromMarkdown rebuilds
-   * every item and wipes DOM-anchor metadata, breaking re-highlight on
-   * reload for untouched items (feature 34). Skip the save when the buffer
-   * isn't dirty, unless `force` is set (explicit Cmd+S).
+   * Persist the current buffer. Called explicitly by Cmd+S (`force: true`)
+   * and, from sidebar.js, as a safety net when the user navigates away from
+   * this context/tab (`force: false`) — merely mounting Monaco and leaving
+   * without typing must NOT trigger a save, so it's a no-op unless the
+   * buffer is actually dirty. There is no timer-based auto-save path.
    */
   async function flush(onSave, { force = false } = {}) {
-    clearTimeout(syncTimer);
     if (!editor || !currentCtxId) return;
     const value = editor.getValue();
     buffers[currentCtxId] = value;
@@ -127,16 +119,17 @@ export function createEditorController() {
       await Store.replaceContextFromMarkdown(currentCtxId, value);
     }
     if (tabDirtyEl) tabDirtyEl.hidden = true;
+    if (currentOnSync) currentOnSync();
   }
 
   function dispose() {
-    clearTimeout(syncTimer);
     if (editor) {
       editor.dispose();
       editor = null;
     }
     tabDirtyEl = null;
     currentCtxId = null;
+    currentOnSync = null;
   }
 
   function peek(ctxId) {

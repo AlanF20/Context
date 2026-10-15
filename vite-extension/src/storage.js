@@ -122,6 +122,42 @@ export function hostnameFromUrl(url) {
   }
 }
 
+// --- PDF sources (feature 37) ---
+
+/** True for items captured in the extension's PDF viewer (they carry a page). */
+export function isPdfItem(it) {
+  return !!it && Number.isInteger(it.page) && it.page >= 1;
+}
+
+/**
+ * Human-readable file name for a PDF URL (http(s) or file://): the last path
+ * segment, percent-decoded. Falls back to the hostname, then a generic label,
+ * so a group header is never empty.
+ */
+export function pdfFilename(url) {
+  if (!url) return "documento.pdf";
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").filter(Boolean).pop() || "";
+    let name = last;
+    try {
+      name = decodeURIComponent(last);
+    } catch (_) {
+      /* malformed escape — keep the raw segment */
+    }
+    return name || u.hostname.replace(/^www\./, "") || "documento.pdf";
+  } catch (_) {
+    const last = String(url).split(/[?#]/)[0].split("/").filter(Boolean).pop();
+    return last || "documento.pdf";
+  }
+}
+
+/** Optional PDF fields for an item; empty object for web items (shape unchanged). */
+function pdfFields(page, sourceTitle) {
+  if (!(Number.isInteger(page) && page >= 1)) return {};
+  return { page, sourceTitle: sourceTitle ? String(sourceTitle) : null };
+}
+
 // --- Low-level read/write of the whole document ---
 
 export function readAll() {
@@ -204,6 +240,8 @@ export async function listSubtitles(contextId) {
  * @param {number|null} [opts.rangeStart]   — selection start offset over the page text (TextPositionSelector)
  * @param {number|null} [opts.rangeEnd]     — selection end offset over the page text (TextPositionSelector)
  * @param {string|null} [opts.comment]      — user's own annotation, text items only
+ * @param {number} [opts.page]              — PDF page (1-based); only for PDF viewer captures
+ * @param {string} [opts.sourceTitle]       — PDF file name shown in the panel
  * @returns {Promise<object>} the saved item
  */
 export async function addItem(contextId, opts) {
@@ -238,6 +276,7 @@ export async function addItem(contextId, opts) {
     // text-node content, captured at save time (anchoring fast path).
     rangeStart: Number.isInteger(opts.rangeStart) ? opts.rangeStart : null,
     rangeEnd: Number.isInteger(opts.rangeEnd) ? opts.rangeEnd : null,
+    ...pdfFields(opts.page, opts.sourceTitle),
   };
 
   // NOTE: duplicates are allowed by design — we never dedupe here.
@@ -354,9 +393,37 @@ export async function moveItem(contextId, itemId, delta) {
   return ctx;
 }
 
+/** Identity key used to match a parsed item back to a pre-existing one in replaceContextFromMarkdown. */
+function itemMatchKey(it) {
+  return JSON.stringify([it.type, it.category || "", it.text]);
+}
+
 /**
  * Rebuild a context's items from raw Markdown text (the editor "live sync"
- * path). Delegates to parseMd() so the store and editor share one contract.
+ * path, now only triggered by an explicit save — Cmd+S or a navigate-away
+ * flush, never by a keystroke timer). Delegates to parseMd() so the store
+ * and editor share one contract.
+ *
+ * Markdown carries no ids, so reconciling old items against the freshly
+ * parsed ones happens in two passes:
+ *
+ *   1. Exact match — a line whose (type, category, text) is byte-identical
+ *      to one that existed before is the SAME item in every sense: id,
+ *      source/sourceUrl, AND its DOM-anchor metadata (rangePrefix/
+ *      rangeSuffix/rangeText/rangeStart/rangeEnd) all carry over untouched.
+ *   2. Positional fallback — among whatever's left unmatched after pass 1,
+ *      pair leftover parsed lines with leftover old items in document order.
+ *      A line the user actually edited no longer matches by content, but is
+ *      still "the same highlight, just reworded": its id/source/sourceUrl
+ *      carry over so it keeps its page association (go-to-source, detected
+ *      context) even though its DOM-anchor fields reset to null — the old
+ *      anchor pointed at text that no longer exists, so it can't be trusted
+ *      for re-highlighting (spec 004/027, unchanged).
+ *
+ * A truly new line (no leftover old item to pair with) gets a fresh id and
+ * no anchor/sourceUrl at all. Without any of this, every save wiped
+ * sourceUrl/anchors for EVERY item in the context, breaking re-highlight and
+ * "go to source" for pages the user never touched in that edit.
  */
 export async function replaceContextFromMarkdown(contextId, md) {
   const data = await readAll();
@@ -365,24 +432,61 @@ export async function replaceContextFromMarkdown(contextId, md) {
 
   const parsed = parseMd(md);
   if (parsed.name) ctx.name = parsed.name;
-  ctx.items = parsed.items.map((it) => ({
-    id: uid("item"),
-    type: it.type,
-    category: it.category || null,
-    text: it.text,
-    linkedSubtitleId: null,
-    source: it.source || "",
-    sourceUrl: "",
-    comment: it.type === "text" ? it.comment || null : null,
-    createdAt: Date.now(),
-    // Anchoring metadata is DOM-position data that Markdown cannot carry;
-    // editor-created items are explicitly not re-anchorable (spec 004/027).
-    rangePrefix: null,
-    rangeSuffix: null,
-    rangeText: null,
-    rangeStart: null,
-    rangeEnd: null,
-  }));
+
+  const exactPool = new Map();
+  for (const it of ctx.items) {
+    const key = itemMatchKey(it);
+    if (!exactPool.has(key)) exactPool.set(key, []);
+    exactPool.get(key).push(it);
+  }
+
+  const matched = new Array(parsed.items.length).fill(null);
+  const isExactMatch = new Array(parsed.items.length).fill(false);
+  const claimed = new Set();
+  parsed.items.forEach((it, i) => {
+    const bucket = exactPool.get(itemMatchKey(it));
+    const old = bucket && bucket.length ? bucket.shift() : null;
+    if (old) {
+      matched[i] = old;
+      isExactMatch[i] = true;
+      claimed.add(old);
+    }
+  });
+
+  const leftoverOld = ctx.items.filter((it) => !claimed.has(it));
+  let cursor = 0;
+  for (let i = 0; i < matched.length; i++) {
+    if (!matched[i] && cursor < leftoverOld.length) {
+      matched[i] = leftoverOld[cursor++];
+    }
+  }
+
+  ctx.items = parsed.items.map((it, i) => {
+    const old = matched[i];
+    const keepAnchor = isExactMatch[i];
+    return {
+      id: old ? old.id : uid("item"),
+      type: it.type,
+      category: it.category || null,
+      text: it.text,
+      linkedSubtitleId: null,
+      source: it.source || (old ? old.source : "") || "",
+      sourceUrl: old ? old.sourceUrl : "",
+      comment: it.type === "text" ? it.comment || null : null,
+      createdAt: old ? old.createdAt : Date.now(),
+      rangePrefix: keepAnchor ? old.rangePrefix : null,
+      rangeSuffix: keepAnchor ? old.rangeSuffix : null,
+      rangeText: keepAnchor ? old.rangeText : null,
+      rangeStart: keepAnchor ? old.rangeStart : null,
+      rangeEnd: keepAnchor ? old.rangeEnd : null,
+      // PDF page/file name (feature 37): an edited "p. N" in the _Fuente:_
+      // line wins; otherwise they carry over like sourceUrl does.
+      ...pdfFields(
+        Number.isInteger(it.page) ? it.page : old ? old.page : undefined,
+        old ? old.sourceTitle : null
+      ),
+    };
+  });
   await writeAll(data);
   return ctx;
 }
@@ -439,8 +543,9 @@ export function exportContextToText(ctx) {
  *
  *   # {context.name}
  *   ## {subtitle.text}
- *   {text.text}
- *   _Fuente: {text.source}_
+ *   {emoji} {text.text}
+ *   > {text.comment}
+ *   _Fuente: {file name}, p. {page}_   ← PDF text items only (feature 37)
  */
 /**
  * Serialize a bare list of items (no context title line) to Markdown, using
@@ -468,10 +573,27 @@ export function buildMdFragment(items) {
           lines.push("> " + commentLine);
         }
       }
+      // PDF notes cite file + page. Subtitles never get this line: parseMd
+      // would attach it to the previous TEXT item instead.
+      if (isPdfItem(it)) lines.push(pdfSourceLine(it));
       lines.push("");
     }
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+/** "_Fuente: paper.pdf, p. 12_", with "_" escaped so it can't break the emphasis. */
+function pdfSourceLine(it) {
+  const name = it.sourceTitle || it.source || pdfFilename(it.sourceUrl);
+  return "_Fuente: " + name.replace(/_/g, "\\_") + ", p. " + it.page + "_";
+}
+
+/** Parse the inside of a "_Fuente: …_" line into { source, page? }. */
+function parseSourceLine(raw) {
+  const text = raw.trim().replace(/\\_/g, "_");
+  const m = text.match(/^(.*?),\s*p\.\s*(\d+)$/);
+  if (m && Number(m[2]) >= 1) return { source: m[1].trim(), page: Number(m[2]) };
+  return { source: text };
 }
 
 export function buildMd(ctx) {
@@ -489,6 +611,7 @@ export const exportContextToMarkdown = buildMd;
  *   "# …"           -> name
  *   "## …" / "### …" -> { type:'subtitle', text }
  *   "_Fuente: X_"   -> attaches source to the LAST text item
+ *   "_Fuente: X, p. N_" -> also sets that item's PDF page (feature 37)
  *   "> …" right after a text item's own line (no blank line between) -> the
  *                      user's comment on THAT item (feature 031); a "> …"
  *                      block with no adjacent text item falls back to the
@@ -529,7 +652,9 @@ export function parseMd(md) {
       lastWasTextLine = false;
       for (let i = items.length - 1; i >= 0; i--) {
         if (items[i].type === "text") {
-          items[i].source = fuente[1].trim();
+          const { source, page } = parseSourceLine(fuente[1]);
+          items[i].source = source;
+          if (page) items[i].page = page;
           break;
         }
       }

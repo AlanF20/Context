@@ -3,7 +3,7 @@
   "name": "Active Reading",
   "version": "2.0.0",
   "description": "Practicá lectura activa: clasificá tus resaltados por categoría y archívalos por contexto de investigación.",
-  "permissions": ["storage", "sidePanel"],
+  "permissions": ["storage", "sidePanel", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "src/assets/icon-16.png",

@@ -1,0 +1,57 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Length 153 >>
+stream
+BT /F1 12 Tf 20 250 Td (Pagina uno: introduccion al documento de prueba.) Tj ET
+BT /F1 12 Tf 20 30 Td (Final de la pagina uno con texto de cierre.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 218 >>
+stream
+BT /F1 12 Tf 20 260 Td (La memoria de trabajo tiene capacidad limitada.) Tj ET
+BT /F1 12 Tf 20 235 Td (Segun Baddeley, el buffer episodico integra informacion.) Tj ET
+BT /F1 12 Tf 20 30 Td (Pie de la pagina dos.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 71 >>
+stream
+BT /F1 12 Tf 20 250 Td (Pagina tres: conclusiones del documento.) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] /Resources << /Font << /F1 3 0 R >> >> /Contents 8 0 R >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000224 00000 n 
+0000000428 00000 n 
+0000000554 00000 n 
+0000000823 00000 n 
+0000000949 00000 n 
+0000001070 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1196
+%%EOF

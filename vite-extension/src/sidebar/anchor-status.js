@@ -6,8 +6,10 @@
  * from the content script via hybrid messaging —
  *   push: CH_ANCHOR_STATUS broadcasts on every anchoring change
  *   pull: CH_GET_ANCHOR_STATUS query on render / tab switch / tab load
- * A rejected sendMessage (chrome://, Web Store, PDFs) means "page not open
- * here" — the strip stays hidden and no error is raised.
+ * A rejected sendMessage (chrome://, Web Store, Chrome's native PDF viewer)
+ * means "page not open here" — the strip stays hidden and no error is raised.
+ * PDFs opened in the extension's own viewer (feature 37) answer the same
+ * messages: tabs.sendMessage also reaches extension pages loaded in a tab.
  * ---------------------------------------------------------------------------
  */
 
