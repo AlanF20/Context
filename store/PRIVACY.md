@@ -1,6 +1,6 @@
 # Política de privacidad — Active Reading
 
-**Última actualización:** 2026-09-15
+**Última actualización:** 2026-10-16
 
 Active Reading es una extensión de Chrome para resaltar texto en cualquier
 página web, clasificarlo por categoría y archivarlo en "contextos" de
@@ -60,4 +60,4 @@ todo su almacenamiento local asociado).
 
 ## Contacto
 
-Para preguntas sobre esta política, contactar a: aflores@terameg.com
+Para preguntas sobre esta política, contactar a: alj20915@gmail.com
