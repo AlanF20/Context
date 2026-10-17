@@ -14,28 +14,30 @@ Practicá lectura activa: clasificá tus resaltados por categoría y archívalos
 ## Descripción detallada
 
 ```
-Active Reading te ayuda a leer con intención: resaltás texto en cualquier
-página, lo clasificás por categoría (título, idea, argumento, evidencia) y
-lo archivás en "contextos" — temas de investigación que armás vos mismo.
+Active Reading te ayuda a leer con intención: resaltás texto en cualquier página, lo clasificás por categoría (título, idea, argumento, evidencia) y lo archivás en "contextos" — temas de investigación que armás vos mismo.
 
 Cómo funciona:
-• Seleccioná texto en cualquier página web.
-• Elegí una categoría con un clic (color = categoría).
+• Seleccioná texto en cualquier página web o PDF.
+• Elegí una categoría con un clic (el color = la categoría).
 • Guardalo en un contexto existente o creá uno nuevo al vuelo.
-• Revisá y editá todas tus notas desde el panel lateral, agrupadas por
-  contexto, con vista de lectura y editor tipo Markdown.
-• Exportá cualquier contexto como archivo .md para llevarlo a tus propias
-  herramientas de escritura o investigación.
+• Revisá y editá todas tus notas desde el panel lateral, con vista de lectura y editor tipo Markdown.
+• Volvé a la página de origen de cualquier resaltado con un clic.
+• Los resaltados se re-aplican solos al recargar la página.
+• Exportá cada contexto como Markdown (.md) o como tarjetas Anki.
+
+PDFs: la extensión incluye su propio visor, así que podés resaltar texto en documentos PDF con la misma fluidez que en una página web. Los resaltados se re-anclan por página la próxima vez que abrís el archivo.
 
 Privacidad:
 • Todo se guarda localmente en tu navegador (chrome.storage.local).
-• No hay servidores propios ni de terceros: no se envía ningún dato fuera
-  de tu equipo.
+• No hay servidores propios ni de terceros: no se envía ningún dato fuera de tu equipo.
 • No hay analítica ni rastreo.
 
-Pensada para estudiantes, investigadores y cualquiera que lea mucho online
-y quiera convertir ese material disperso en notas organizadas y reutilizables.
+Pensada para estudiantes, investigadores y cualquiera que lea mucho online y quiera convertir ese material disperso en notas organizadas y reutilizables.
 ```
+
+> Actualizada 2026-10-15 para incluir el visor PDF (feature #37), la
+> navegación al origen (#32) y el export Anki (#28), presentes en
+> `active-reading-v2.0.0.zip`.
 
 ## Categoría sugerida
 
@@ -43,8 +45,9 @@ y quiera convertir ese material disperso en notas organizadas y reutilizables.
 
 ## Idioma
 
-Español (es). La UI es 100% en español; si se traduce a otros idiomas en el
-futuro, actualizar `default_locale` en el manifest y agregar `_locales/`.
+Español (Latinoamérica) (es-419). La UI es 100% en español con voseo
+latinoamericano; si se traduce a otros idiomas en el futuro, actualizar
+`default_locale` en el manifest y agregar `_locales/`.
 
 ## Justificación de permisos (pestaña "Permissions justification" del dashboard)
 
@@ -83,19 +86,47 @@ ni transmite el resto del contenido de la página.
   público (GitHub Pages, Gist "raw", sitio propio, etc.) y pegar esa URL acá.
   **Pendiente: elegir dónde alojarla** — este repo no tiene remoto configurado.
 
-## Assets pendientes (no se pueden generar solo con código)
+## Assets gráficos — generados en `store/chrome-webstore-upload/assets/`
 
-- Ícono de listing 128×128: ya existe (`vite-extension/src/assets/icon-128.png`),
-  recortado y aislado (fondo transparente) del mascot "Penny" en
-  `penny-the-highlighter.jpeg`.
-- `vite-extension/src/assets/penny-logo.jpeg` (escena ancha del highlighter
-  dibujando líneas de colores) queda reservada para uso en el listing del
-  Store (marquee/promo o como hero screenshot), no se usa como ícono.
-- Al menos 1 captura de pantalla, 1280×800 o 640×400 px (obligatorio).
-- Opcional: "small promo tile" 440×280 y "marquee" 1400×560 (candidato:
-  `penny-logo.jpeg`, ya es apaisada).
+Generados con la extensión real (Playwright carga `dist/`, arrastra
+selecciones reales y captura la UI de verdad) más composición desde el
+artwork de Penny:
+
+- `01-captura-toolbar.png` (1280×800) — selección viva + toolbar flotante de
+  categorías sobre un artículo real de Wikipedia (es).
+- `02-resaltados-categoria.png` (1280×800) — 5 resaltados pintados en
+  amarillo/azul/verde + toast "✓ Guardado / + agregar comentario".
+- `03-panel-vista.png` (1280×800) — panel lateral con notas por categoría,
+  comentarios, agrupación por fuente y botón Exportar.
+- `04-visor-pdf.png` (1280×800) — visor PDF propio con un resaltado capturado.
+- `promo-small-440x280.png` — wordmark + tagline + dots de categoría + Penny.
+- `promo-marquee-1400x560.png` — escena `penny-logo.jpeg` recortada con el
+  wordmark escrito sobre el papel del cuaderno.
+
+**Opciones extra (05–07)**, capturadas sobre las URLs documentadas en
+`tests/e2e/fixtures/test-sites.js` (importadas directo por el script, sin
+duplicar) — elegir las 5 que mejor luzcan para el listing:
+
+- `05-captura-houstonmethodist.png` — selección + toolbar sobre el artículo
+  (es) de Houston Methodist.
+- `06-resaltados-houstonmethodist.png` — 5 resaltados + toast en el mismo
+  artículo, layout editorial.
+- `07-resaltados-wikipedia-cortisol.png` — resaltados en la entrada
+  "Cortisol" de Wikipedia (es).
+
+AnkiWeb docs quedó excluido: el sitio fue rediseñado (Mintlify, sin `<main>`,
+render client-side) y el selector documentado ya no aplica — su entrada en
+TEST_SITES necesita reverificación. Medium quedó excluido por el overlay de
+paywall.
+
+Regenerar: `node scripts/make-store-screenshots.mjs`,
+`node scripts/make-store-screenshots-sites.mjs` y
+`python3 scripts/make-store-promos.py` (desde `vite-extension/`, tras
+`pnpm run build`). Ícono de listing 128×128: `vite-extension/src/assets/icon-128.png`.
 
 ## Paquete para subir
 
-`store/active-reading-v2.0.0.zip` (generado desde `vite-extension/dist/`
-tras `pnpm run build`).
+`store/chrome-webstore-upload/active-reading-v2.0.0.zip` (generado desde
+`vite-extension/dist/` tras `pnpm run build`, con `manifest.json` en la
+raíz del zip). El zip homónimo que quedó suelto en `store/` (17-sep) está
+obsoleto: no incluye el visor PDF.
